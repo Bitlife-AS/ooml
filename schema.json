@@ -1,0 +1,873 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$id": "https://ooml.org/schema/0.1.0/schema.json",
+	"title": "OOML 0.1.0 Artefact Schema",
+	"description": "An OOML document is one of: a class artefact or an attribute definition artefact. Discrimination is by the presence of top-level 'kind' (attribute definition) vs its absence (class).",
+	"$defs": {
+		"semver": {
+			"type": "string",
+			"description": "A semantic version string: MAJOR.MINOR.TRIVIAL with optional pre-release and build metadata.",
+			"pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-((?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\\+([0-9a-zA-Z-]+(?:\\.[0-9a-zA-Z-]+)*))?$"
+		},
+		"semverRange": {
+			"type": "string",
+			"description": "A semver version range: exact, ^, ~, >=x <y, or *.",
+			"pattern": "^(\\*|(>=?(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(\\s*<(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*))?)|([~^])?(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*).*)$"
+		},
+		"namespace": {
+			"type": "string",
+			"description": "Reverse-domain namespace: one or more lowercase alphanumeric segments separated by dots.",
+			"pattern": "^[a-z][a-z0-9]*(\\.[a-z][a-z0-9]*)+$"
+		},
+		"artefactName": {
+			"type": "string",
+			"description": "PascalCase artefact name (class or attribute definition).",
+			"pattern": "^[A-Z][A-Za-z0-9]*$"
+		},
+		"classFqn": {
+			"type": "string",
+			"description": "Exact FQN of a class: namespace/ClassName@version",
+			"pattern": "^[a-z][a-z0-9]*(\\.[a-z][a-z0-9]*)*/[A-Z][A-Za-z0-9]*@(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*).*$"
+		},
+		"attributeFqn": {
+			"type": "string",
+			"description": "Exact FQN of an attribute definition: namespace/AttrName@version",
+			"pattern": "^[a-z][a-z0-9]*(\\.[a-z][a-z0-9]*)*/[A-Z][A-Za-z0-9]*@(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*).*$"
+		},
+		"classFqnRange": {
+			"type": "string",
+			"description": "FQN range referencing a class: namespace/ClassName@versionRange or 'self'.",
+			"pattern": "^(self|[a-z][a-z0-9]*(\\.[a-z][a-z0-9]*)*/[A-Z][A-Za-z0-9]*@.+)$"
+		},
+		"attributeFqnRange": {
+			"type": "string",
+			"description": "FQN range referencing an attribute definition: namespace/AttrName@versionRange.",
+			"pattern": "^[a-z][a-z0-9]*(\\.[a-z][a-z0-9]*)*/[A-Z][A-Za-z0-9]*@.+$"
+		},
+		"attributeSlotId": {
+			"type": "string",
+			"description": "camelCase attribute slot identifier.",
+			"pattern": "^[a-z][a-zA-Z0-9]*$"
+		},
+		"aliasName": {
+			"type": "string",
+			"description": "camelCase alias name.",
+			"pattern": "^[a-z][a-zA-Z0-9]*$"
+		},
+		"primitiveTypeName": {
+			"type": "string",
+			"description": "One of the built-in OOML primitive type names.",
+			"enum": [
+				"boolean",
+				"int8",
+				"int16",
+				"int32",
+				"int64",
+				"uint8",
+				"uint16",
+				"uint32",
+				"uint64",
+				"float32",
+				"float64",
+				"decimal",
+				"string",
+				"date",
+				"time",
+				"datetime",
+				"duration",
+				"uuid",
+				"uri",
+				"binary",
+				"any"
+			]
+		},
+		"slotKind": {
+			"type": "string",
+			"description": "Structural role of an attribute slot.",
+			"enum": [
+				"primitive",
+				"object",
+				"class",
+				"enum",
+				"list",
+				"set",
+				"map",
+				"attribute"
+			]
+		},
+		"nonEmptyString": {
+			"type": "string",
+			"minLength": 1
+		},
+		"authors": {
+			"type": "array",
+			"items": {
+				"type": "string",
+				"minLength": 1
+			},
+			"description": "Authors in 'Name <email>' format."
+		},
+		"extendsValue": {
+			"description": "Superclass FQN range(s). A string or array of strings; omit for no superclass.",
+			"oneOf": [
+				{
+					"$ref": "#/$defs/classFqnRange"
+				},
+				{
+					"type": "array",
+					"items": {
+						"$ref": "#/$defs/classFqnRange"
+					},
+					"minItems": 1
+				}
+			]
+		},
+		"metadataEntryCompound": {
+			"type": "object",
+			"description": "Compound-form metadata attribute value with control properties.",
+			"properties": {
+				"value": {
+					"description": "The metadata value. May be null to declare a required slot without providing a value."
+				},
+				"required": {
+					"type": "boolean",
+					"description": "Whether a concrete non-null value must be present. Default: true."
+				},
+				"cascade": {
+					"type": "boolean",
+					"description": "If true, the value propagates to subclasses that do not set their own. Default: false."
+				},
+				"local": {
+					"type": "boolean",
+					"description": "If true, this entry is not inherited by subclasses. Default: false."
+				},
+				"final": {
+					"type": "boolean",
+					"description": "If true, subclasses cannot override this entry's value. Default: false."
+				}
+			},
+			"required": [
+				"value"
+			],
+			"additionalProperties": false,
+			"not": {
+				"description": "Rule M01: local and cascade must not both be true.",
+				"properties": {
+					"local": {
+						"const": true
+					},
+					"cascade": {
+						"const": true
+					}
+				},
+				"required": [
+					"local",
+					"cascade"
+				]
+			}
+		},
+		"metadataEntry": {
+			"description": "A metadata schema attribute value: short form (any scalar/non-object) or compound form.",
+			"oneOf": [
+				{
+					"description": "Short form: a direct scalar value (string, number, boolean, null, array).",
+					"not": {
+						"type": "object"
+					}
+				},
+				{
+					"$ref": "#/$defs/metadataEntryCompound"
+				}
+			]
+		},
+		"metadataSchemaValue": {
+			"type": "object",
+			"description": "A metadata entry object: keys are attribute slot names of the schema class; values are metadata entries.",
+			"additionalProperties": {
+				"$ref": "#/$defs/metadataEntry"
+			}
+		},
+		"metadataObject": {
+			"type": "object",
+			"description": "The metadata property: keys are metadata schema FQN ranges; values are schema attribute maps.",
+			"additionalProperties": {
+				"$ref": "#/$defs/metadataSchemaValue"
+			}
+		},
+		"aliasesObject": {
+			"type": "object",
+			"description": "Aliases: keys are camelCase alias names; values are attribute FQN ranges.",
+			"propertyNames": {
+				"$ref": "#/$defs/aliasName"
+			},
+			"additionalProperties": {
+				"$ref": "#/$defs/classFqnRange"
+			}
+		},
+		"dependenciesObject": {
+			"type": "object",
+			"description": "Dependencies: keys are FQN base names; values are version ranges.",
+			"additionalProperties": {
+				"$ref": "#/$defs/semverRange"
+			}
+		},
+		"commonSlotProperties": {
+			"description": "Properties shared by all attribute slot kinds.",
+			"properties": {
+				"name": {
+					"$ref": "#/$defs/nonEmptyString",
+					"description": "Free-form human-readable label for this attribute slot."
+				},
+				"description": {
+					"$ref": "#/$defs/nonEmptyString",
+					"description": "Human-readable purpose of this attribute slot."
+				},
+				"required": {
+					"type": "boolean",
+					"description": "Whether instances MUST carry a value for this slot. Default: false. Must not be true on static slots."
+				},
+				"nullable": {
+					"type": "boolean",
+					"description": "Whether the instance-level value may be null. Default: false. Must not be true on static slots."
+				},
+				"static": {
+					"type": "boolean",
+					"description": "If true, the value belongs to the class rather than instances. Default: false."
+				},
+				"value": {
+					"description": "The class-level value for a static slot. Must not appear on non-static slots."
+				},
+				"local": {
+					"type": "boolean",
+					"description": "If true, this slot is not inherited by subclasses. Default: false."
+				},
+				"final": {
+					"type": "boolean",
+					"description": "If true, subclasses cannot shadow or redeclare this slot. Default: false."
+				},
+				"deprecated": {
+					"$ref": "#/$defs/nonEmptyString",
+					"description": "Deprecation message. Omit when not deprecated."
+				}
+			},
+			"required": [
+				"name"
+			]
+		},
+		"primitiveSlot": {
+			"description": "An attribute slot of kind 'primitive'.",
+			"allOf": [
+				{
+					"$ref": "#/$defs/commonSlotProperties"
+				},
+				{
+					"type": "object",
+					"properties": {
+						"kind": {
+							"const": "primitive"
+						},
+						"type": {
+							"$ref": "#/$defs/primitiveTypeName"
+						},
+						"minLength": {
+							"type": "integer",
+							"minimum": 0
+						},
+						"maxLength": {
+							"type": "integer",
+							"minimum": 0
+						},
+						"pattern": {
+							"type": "string"
+						},
+						"minimum": {
+							"type": "number"
+						},
+						"maximum": {
+							"type": "number"
+						},
+						"exclusiveMinimum": {
+							"type": "number"
+						},
+						"exclusiveMaximum": {
+							"type": "number"
+						},
+						"precision": {
+							"type": "integer",
+							"minimum": 1
+						},
+						"scale": {
+							"type": "integer",
+							"minimum": 0
+						},
+						"encoding": {
+							"type": "string"
+						},
+						"name": {},
+						"description": {},
+						"required": {},
+						"nullable": {},
+						"static": {},
+						"value": {},
+						"local": {},
+						"final": {},
+						"deprecated": {}
+					},
+					"required": [
+						"kind",
+						"type"
+					],
+					"additionalProperties": false
+				}
+			]
+		},
+		"objectSlot": {
+			"description": "An attribute slot of kind 'object': instance reference embedded by value.",
+			"allOf": [
+				{
+					"$ref": "#/$defs/commonSlotProperties"
+				},
+				{
+					"type": "object",
+					"properties": {
+						"kind": {
+							"const": "object"
+						},
+						"type": {
+							"$ref": "#/$defs/classFqnRange"
+						},
+						"name": {},
+						"description": {},
+						"required": {},
+						"nullable": {},
+						"static": {},
+						"value": {},
+						"local": {},
+						"final": {},
+						"deprecated": {}
+					},
+					"required": [
+						"kind",
+						"type"
+					],
+					"additionalProperties": false
+				}
+			]
+		},
+		"classSlot": {
+			"description": "An attribute slot of kind 'class': reference to a class itself or any subtype.",
+			"allOf": [
+				{
+					"$ref": "#/$defs/commonSlotProperties"
+				},
+				{
+					"type": "object",
+					"properties": {
+						"kind": {
+							"const": "class"
+						},
+						"type": {
+							"$ref": "#/$defs/classFqnRange"
+						},
+						"name": {},
+						"description": {},
+						"required": {},
+						"nullable": {},
+						"static": {},
+						"value": {},
+						"local": {},
+						"final": {},
+						"deprecated": {}
+					},
+					"required": [
+						"kind",
+						"type"
+					],
+					"additionalProperties": false
+				}
+			]
+		},
+		"enumSlot": {
+			"description": "An attribute slot of kind 'enum': reference to a strict subtype of the named root class.",
+			"allOf": [
+				{
+					"$ref": "#/$defs/commonSlotProperties"
+				},
+				{
+					"type": "object",
+					"properties": {
+						"kind": {
+							"const": "enum"
+						},
+						"type": {
+							"$ref": "#/$defs/classFqnRange"
+						},
+						"name": {},
+						"description": {},
+						"required": {},
+						"nullable": {},
+						"static": {},
+						"value": {},
+						"local": {},
+						"final": {},
+						"deprecated": {}
+					},
+					"required": [
+						"kind",
+						"type"
+					],
+					"additionalProperties": false
+				}
+			]
+		},
+		"collectionValueKind": {
+			"type": "string",
+			"description": "Kind of collection values.",
+			"enum": [
+				"primitive",
+				"object",
+				"class",
+				"enum",
+				"attribute"
+			]
+		},
+		"collectionValueType": {
+			"description": "Type of collection values: primitive name, class FQN range, attrdef FQN range, or 'self'.",
+			"oneOf": [
+				{
+					"$ref": "#/$defs/primitiveTypeName"
+				},
+				{
+					"$ref": "#/$defs/classFqnRange"
+				},
+				{
+					"$ref": "#/$defs/attributeFqnRange"
+				}
+			]
+		},
+		"listSlot": {
+			"description": "An attribute slot of kind 'list': ordered sequence allowing duplicates.",
+			"allOf": [
+				{
+					"$ref": "#/$defs/commonSlotProperties"
+				},
+				{
+					"type": "object",
+					"properties": {
+						"kind": {
+							"const": "list"
+						},
+						"valueKind": {
+							"$ref": "#/$defs/collectionValueKind"
+						},
+						"valueType": {
+							"$ref": "#/$defs/collectionValueType"
+						},
+						"minItems": {
+							"type": "integer",
+							"minimum": 0
+						},
+						"maxItems": {
+							"type": "integer",
+							"minimum": 0
+						},
+						"name": {},
+						"description": {},
+						"required": {},
+						"nullable": {},
+						"static": {},
+						"value": {},
+						"local": {},
+						"final": {},
+						"deprecated": {}
+					},
+					"required": [
+						"kind",
+						"valueKind"
+					],
+					"additionalProperties": false
+				}
+			]
+		},
+		"setSlot": {
+			"description": "An attribute slot of kind 'set': unordered collection without duplicates.",
+			"allOf": [
+				{
+					"$ref": "#/$defs/commonSlotProperties"
+				},
+				{
+					"type": "object",
+					"properties": {
+						"kind": {
+							"const": "set"
+						},
+						"valueKind": {
+							"$ref": "#/$defs/collectionValueKind"
+						},
+						"valueType": {
+							"$ref": "#/$defs/collectionValueType"
+						},
+						"minItems": {
+							"type": "integer",
+							"minimum": 0
+						},
+						"maxItems": {
+							"type": "integer",
+							"minimum": 0
+						},
+						"name": {},
+						"description": {},
+						"required": {},
+						"nullable": {},
+						"static": {},
+						"value": {},
+						"local": {},
+						"final": {},
+						"deprecated": {}
+					},
+					"required": [
+						"kind",
+						"valueKind"
+					],
+					"additionalProperties": false
+				}
+			]
+		},
+		"mapSlot": {
+			"description": "An attribute slot of kind 'map': key-value pairs with unique keys.",
+			"allOf": [
+				{
+					"$ref": "#/$defs/commonSlotProperties"
+				},
+				{
+					"type": "object",
+					"properties": {
+						"kind": {
+							"const": "map"
+						},
+						"keyKind": {
+							"$ref": "#/$defs/collectionValueKind"
+						},
+						"keyType": {
+							"$ref": "#/$defs/collectionValueType"
+						},
+						"valueKind": {
+							"$ref": "#/$defs/collectionValueKind"
+						},
+						"valueType": {
+							"$ref": "#/$defs/collectionValueType"
+						},
+						"minItems": {
+							"type": "integer",
+							"minimum": 0
+						},
+						"maxItems": {
+							"type": "integer",
+							"minimum": 0
+						},
+						"name": {},
+						"description": {},
+						"required": {},
+						"nullable": {},
+						"static": {},
+						"value": {},
+						"local": {},
+						"final": {},
+						"deprecated": {}
+					},
+					"required": [
+						"kind",
+						"valueKind"
+					],
+					"additionalProperties": false
+				}
+			]
+		},
+		"attributeSlot": {
+			"description": "An attribute slot of kind 'attribute': references a standalone attribute definition.",
+			"allOf": [
+				{
+					"$ref": "#/$defs/commonSlotProperties"
+				},
+				{
+					"type": "object",
+					"properties": {
+						"kind": {
+							"const": "attribute"
+						},
+						"type": {
+							"$ref": "#/$defs/attributeFqnRange"
+						},
+						"name": {},
+						"description": {},
+						"required": {},
+						"nullable": {},
+						"static": {},
+						"value": {},
+						"local": {},
+						"final": {},
+						"deprecated": {}
+					},
+					"required": [
+						"kind",
+						"type"
+					],
+					"additionalProperties": false
+				}
+			]
+		},
+		"anySlot": {
+			"description": "Any attribute slot definition, discriminated by 'kind'.",
+			"oneOf": [
+				{
+					"$ref": "#/$defs/primitiveSlot"
+				},
+				{
+					"$ref": "#/$defs/objectSlot"
+				},
+				{
+					"$ref": "#/$defs/classSlot"
+				},
+				{
+					"$ref": "#/$defs/enumSlot"
+				},
+				{
+					"$ref": "#/$defs/listSlot"
+				},
+				{
+					"$ref": "#/$defs/setSlot"
+				},
+				{
+					"$ref": "#/$defs/mapSlot"
+				},
+				{
+					"$ref": "#/$defs/attributeSlot"
+				}
+			]
+		},
+		"attributesObject": {
+			"type": "object",
+			"description": "Map of slot identifier (camelCase) to attribute slot definition.",
+			"propertyNames": {
+				"$ref": "#/$defs/attributeSlotId"
+			},
+			"additionalProperties": {
+				"$ref": "#/$defs/anySlot"
+			}
+		},
+		"classArtefact": {
+			"type": "object",
+			"description": "A standalone published OOML class artefact.",
+			"properties": {
+				"ooml": {
+					"$ref": "#/$defs/semver",
+					"description": "OOML specification version this artefact targets."
+				},
+				"fqn": {
+					"$ref": "#/$defs/classFqn",
+					"description": "Fully qualified name and version of this class."
+				},
+				"name": {
+					"$ref": "#/$defs/nonEmptyString",
+					"description": "Free-form human-readable label for this class."
+				},
+				"description": {
+					"$ref": "#/$defs/nonEmptyString",
+					"description": "Human-readable purpose of this class."
+				},
+				"authors": {
+					"$ref": "#/$defs/authors"
+				},
+				"license": {
+					"type": "string",
+					"minLength": 1
+				},
+				"extends": {
+					"$ref": "#/$defs/extendsValue"
+				},
+				"abstract": {
+					"type": "boolean"
+				},
+				"final": {
+					"type": "boolean"
+				},
+				"deprecated": {
+					"$ref": "#/$defs/nonEmptyString"
+				},
+				"aliases": {
+					"$ref": "#/$defs/aliasesObject"
+				},
+				"metadata": {
+					"$ref": "#/$defs/metadataObject"
+				},
+				"dependencies": {
+					"$ref": "#/$defs/dependenciesObject"
+				},
+				"attributes": {
+					"$ref": "#/$defs/attributesObject"
+				}
+			},
+			"required": [
+				"ooml",
+				"fqn",
+				"name"
+			],
+			"additionalProperties": false,
+			"not": {
+				"description": "Rule S08: a class must not be both abstract and final.",
+				"properties": {
+					"abstract": {
+						"const": true
+					},
+					"final": {
+						"const": true
+					}
+				},
+				"required": [
+					"abstract",
+					"final"
+				]
+			}
+		},
+		"attrdefArtefact": {
+			"type": "object",
+			"description": "A standalone published OOML attribute definition artefact.",
+			"properties": {
+				"ooml": {
+					"$ref": "#/$defs/semver",
+					"description": "OOML specification version this artefact targets."
+				},
+				"fqn": {
+					"$ref": "#/$defs/attributeFqn",
+					"description": "Fully qualified name and version of this attribute definition."
+				},
+				"name": {
+					"$ref": "#/$defs/nonEmptyString",
+					"description": "Free-form human-readable label for this attribute definition."
+				},
+				"description": {
+					"$ref": "#/$defs/nonEmptyString",
+					"description": "Human-readable purpose of this attribute definition."
+				},
+				"authors": {
+					"$ref": "#/$defs/authors"
+				},
+				"license": {
+					"type": "string",
+					"minLength": 1
+				},
+				"kind": {
+					"$ref": "#/$defs/slotKind"
+				},
+				"type": {
+					"description": "Value type: primitive name or class/attrdef FQN range.",
+					"oneOf": [
+						{
+							"$ref": "#/$defs/primitiveTypeName"
+						},
+						{
+							"$ref": "#/$defs/classFqnRange"
+						},
+						{
+							"$ref": "#/$defs/attributeFqnRange"
+						}
+					]
+				},
+				"minLength": {
+					"type": "integer",
+					"minimum": 0
+				},
+				"maxLength": {
+					"type": "integer",
+					"minimum": 0
+				},
+				"pattern": {
+					"type": "string"
+				},
+				"minimum": {
+					"type": "number"
+				},
+				"maximum": {
+					"type": "number"
+				},
+				"exclusiveMinimum": {
+					"type": "number"
+				},
+				"exclusiveMaximum": {
+					"type": "number"
+				},
+				"precision": {
+					"type": "integer",
+					"minimum": 1
+				},
+				"scale": {
+					"type": "integer",
+					"minimum": 0
+				},
+				"encoding": {
+					"type": "string"
+				},
+				"valueKind": {
+					"$ref": "#/$defs/collectionValueKind"
+				},
+				"valueType": {
+					"$ref": "#/$defs/collectionValueType"
+				},
+				"keyKind": {
+					"$ref": "#/$defs/collectionValueKind"
+				},
+				"keyType": {
+					"$ref": "#/$defs/collectionValueType"
+				},
+				"minItems": {
+					"type": "integer",
+					"minimum": 0
+				},
+				"maxItems": {
+					"type": "integer",
+					"minimum": 0
+				},
+				"deprecated": {
+					"$ref": "#/$defs/nonEmptyString"
+				},
+				"metadata": {
+					"$ref": "#/$defs/metadataObject"
+				}
+			},
+			"required": [
+				"ooml",
+				"fqn",
+				"name",
+				"kind"
+			],
+			"additionalProperties": false
+		}
+	},
+	"oneOf": [
+		{
+			"description": "A standalone class artefact (has 'fqn', no 'kind' at top level).",
+			"$ref": "#/$defs/classArtefact",
+			"required": [
+				"ooml",
+				"fqn",
+				"name"
+			],
+			"properties": {
+				"namespace": false
+			}
+		},
+		{
+			"description": "A standalone attribute definition artefact (has 'fqn' and top-level 'kind').",
+			"$ref": "#/$defs/attrdefArtefact",
+			"required": [
+				"ooml",
+				"fqn",
+				"name",
+				"kind"
+			],
+			"properties": {
+				"namespace": false
+			}
+		}
+	]
+}
