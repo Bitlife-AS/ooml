@@ -1,7 +1,7 @@
 {
 	"$schema": "https://json-schema.org/draft/2020-12/schema",
-	"$id": "https://ooml.org/schema/0.1.0/schema.json",
-	"title": "OOML 0.1.0 Artefact Schema",
+	"$id": "https://ooml.org/schema/ooml.0.1.0.json",
+	"title": "OOML 0.1.0 \u2014 Object-Oriented Modeling Language schema",
 	"description": "An OOML document is one of: a class artefact or an attribute definition artefact. Discrimination is by the presence of top-level 'kind' (attribute definition) vs its absence (class).",
 	"$defs": {
 		"semver": {
@@ -29,7 +29,7 @@
 			"description": "Exact FQN of a class: namespace/ClassName@version",
 			"pattern": "^[a-z][a-z0-9]*(\\.[a-z][a-z0-9]*)*/[A-Z][A-Za-z0-9]*@(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*).*$"
 		},
-		"attributeFqn": {
+		"attrdefFqn": {
 			"type": "string",
 			"description": "Exact FQN of an attribute definition: namespace/AttrName@version",
 			"pattern": "^[a-z][a-z0-9]*(\\.[a-z][a-z0-9]*)*/[A-Z][A-Za-z0-9]*@(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*).*$"
@@ -39,12 +39,12 @@
 			"description": "FQN range referencing a class: namespace/ClassName@versionRange or 'self'.",
 			"pattern": "^(self|[a-z][a-z0-9]*(\\.[a-z][a-z0-9]*)*/[A-Z][A-Za-z0-9]*@.+)$"
 		},
-		"attributeFqnRange": {
+		"attrdefFqnRange": {
 			"type": "string",
 			"description": "FQN range referencing an attribute definition: namespace/AttrName@versionRange.",
 			"pattern": "^[a-z][a-z0-9]*(\\.[a-z][a-z0-9]*)*/[A-Z][A-Za-z0-9]*@.+$"
 		},
-		"attributeSlotId": {
+		"slotIdentifier": {
 			"type": "string",
 			"description": "camelCase attribute slot identifier.",
 			"pattern": "^[a-z][a-zA-Z0-9]*$"
@@ -202,13 +202,6 @@
 			},
 			"additionalProperties": {
 				"$ref": "#/$defs/classFqnRange"
-			}
-		},
-		"dependenciesObject": {
-			"type": "object",
-			"description": "Dependencies: keys are FQN base names; values are version ranges.",
-			"additionalProperties": {
-				"$ref": "#/$defs/semverRange"
 			}
 		},
 		"commonSlotProperties": {
@@ -441,7 +434,7 @@
 					"$ref": "#/$defs/classFqnRange"
 				},
 				{
-					"$ref": "#/$defs/attributeFqnRange"
+					"$ref": "#/$defs/attrdefFqnRange"
 				}
 			]
 		},
@@ -596,7 +589,7 @@
 							"const": "attribute"
 						},
 						"type": {
-							"$ref": "#/$defs/attributeFqnRange"
+							"$ref": "#/$defs/attrdefFqnRange"
 						},
 						"name": {},
 						"description": {},
@@ -649,7 +642,7 @@
 			"type": "object",
 			"description": "Map of slot identifier (camelCase) to attribute slot definition.",
 			"propertyNames": {
-				"$ref": "#/$defs/attributeSlotId"
+				"$ref": "#/$defs/slotIdentifier"
 			},
 			"additionalProperties": {
 				"$ref": "#/$defs/anySlot"
@@ -700,9 +693,6 @@
 				"metadata": {
 					"$ref": "#/$defs/metadataObject"
 				},
-				"dependencies": {
-					"$ref": "#/$defs/dependenciesObject"
-				},
 				"attributes": {
 					"$ref": "#/$defs/attributesObject"
 				}
@@ -738,7 +728,7 @@
 					"description": "OOML specification version this artefact targets."
 				},
 				"fqn": {
-					"$ref": "#/$defs/attributeFqn",
+					"$ref": "#/$defs/attrdefFqn",
 					"description": "Fully qualified name and version of this attribute definition."
 				},
 				"name": {
@@ -769,7 +759,7 @@
 							"$ref": "#/$defs/classFqnRange"
 						},
 						{
-							"$ref": "#/$defs/attributeFqnRange"
+							"$ref": "#/$defs/attrdefFqnRange"
 						}
 					]
 				},

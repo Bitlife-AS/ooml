@@ -41,7 +41,7 @@ OOML is designed to be accessible to both technical and business practitioners, 
 
 | File | Description |
 |------|-------------|
-| [`Specification.md`](Specification.md) | Current draft specification |
+| [`Specification.md`](OOML.md) | Current draft specification |
 
 The specification is a single Markdown document organised into 20 sections:
 

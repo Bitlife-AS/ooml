@@ -38,13 +38,12 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 11. [Inheritance: Superclasses and Subclasses](#11-inheritance-superclasses-and-subclasses)
 12. [Aliases](#12-aliases)
 13. [Type Hierarchy: Supertypes and Subtypes](#13-type-hierarchy-supertypes-and-subtypes)
-14. [Dependencies](#14-dependencies)
-15. [The Dependency Graph](#15-the-dependency-graph)
-16. [Serialisation Format](#16-serialisation-format)
-17. [Validation Rules](#17-validation-rules)
-18. [Complete Example](#18-complete-example)
-19. [Grammar (ABNF)](#19-grammar-abnf)
-20. [Design Notes and Rationale](#20-design-notes-and-rationale)
+14. [The Dependency Graph](#14-the-dependency-graph)
+15. [Serialisation Format](#15-serialisation-format)
+16. [Validation Rules](#16-validation-rules)
+17. [Complete Example](#17-complete-example)
+18. [Grammar (ABNF)](#18-grammar-abnf)
+19. [Design Notes and Rationale](#19-design-notes-and-rationale)
 
 ---
 
@@ -131,7 +130,7 @@ The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "S
 | **FQN** | Fully Qualified Name; the globally unique identity of a class or attribute definition (see §4) |
 | **`self`** | A reserved type reference used during authoring to refer to the declaring class itself; expanded to the class's FQN range before distribution |
 | **Name** | A free-form, human-readable label on an artefact, independent of the FQN and unconstrained by language |
-| **Dependency** | A declared, versioned reference from one artefact to another that it structurally relies upon |
+| **Dependency** | A versioned reference from one artefact to another that it structurally relies upon, derived from the referencing artefact's own body |
 | **Dependency Graph** | The directed acyclic graph (DAG) whose nodes are artefact versions and whose edges are dependencies |
 | **Metadata** | Structured, typed, versioned annotations on an OOML artefact, defined using OOML classes as schemas |
 | **Metadata Schema** | An ordinary OOML class used as the schema for a metadata entry; carries no special marker |
@@ -440,7 +439,7 @@ Attribute definitions follow the same change-impact contract as classes (§6). B
 
 ### 7.6 Attribute Definitions and the Dependency Graph
 
-When a class references an attribute definition, an edge is created in the dependency graph from the class to the attribute definition. This edge is of type `attribute-import` and participates in cycle detection (an `object`-kind attribute definition that referenced the importing class would create a structural cycle and is rejected by rule D03).
+When a class references an attribute definition, this is read as an edge in the (derived) dependency graph from the class to the attribute definition. This edge is of type `attribute-import` and participates in cycle detection (an `object`-kind attribute definition that referenced the importing class would create a structural cycle and is rejected by rule D02).
 
 Enum roots are ordinary classes. A dependency on an enum root appears as a standard class edge in the dependency graph, identical to any other class dependency.
 
@@ -904,8 +903,7 @@ Interaction rules for attribute slots:
 
 Each metadata schema FQN range declared as a key in the `metadata` object creates a `metadata` edge in the dependency graph from the declaring artefact to the metadata schema class. This edge participates in the same dependency resolution and cycle-detection rules as all other edges. Specifically:
 
-- A `metadata` edge is treated as a structural dependency for cycle detection purposes. A class that uses itself as its own metadata schema would create a structural cycle and is rejected (rule D03).
-- The metadata schema class FQN MUST appear in the declaring artefact's `dependencies` map (rule D01).
+- A `metadata` edge is treated as a structural dependency for cycle detection purposes. A class that uses itself as its own metadata schema would create a structural cycle and is rejected (rule D02).
 
 ---
 
@@ -1085,52 +1083,37 @@ The `dependents` operation is the direct answer to the query that motivated this
 
 ---
 
-## 14. Dependencies
+## 14. The Dependency Graph
 
-### 14.1 The `dependencies` Property
+### 14.1 Structure
 
-Every class definition MAY declare a `dependencies` object. This is the explicit, machine-readable record of every external class or attribute definition the class structurally relies upon. The `dependencies` map enables any resolution system or tooling to determine which external artefacts must be available before this class can be fully resolved. The mechanism of resolution is outside the scope of this specification.
+The OOML dependency graph is a directed acyclic graph (DAG) where:
 
-```json
-{
-	"ooml": "0.1.0",
-	"fqn": "com.example.hr/Employee@1.2.0",
-	"name": "Employee",
-	"description": "...",
-	"extends": "com.example.hr/Person@^1.0.0",
-	"dependencies": {
-		"com.example.hr/Person": "^1.0.0",
-		"com.example.hr/Department": "^2.1.0",
-		"com.example.hr/EmploymentType": "^1.0.0"
-	},
-	"attributes": {
-		"department": {
-			"kind": "class",
-			"type": "com.example.hr/Department@^2.1.0",
-			"name": "Department",
-			"description": "The department this employee belongs to.",
-			"required": true
-		},
-		"employmentType": {
-			"kind": "enum",
-			"type": "com.example.hr/EmploymentType@^1.0.0",
-			"name": "Employment Type",
-			"description": "The nature of this person's engagement.",
-			"required": true
-		}
-	}
-}
-```
+- **Nodes** are class and attribute definition versions, identified by their exact FQN (including version).
+- **Edges** are directed from a dependent to its dependency, labelled with the version range found at the point of reference.
 
-The `dependencies` map is the union of all external FQN ranges referenced anywhere in the class definition: in `extends`, in all attribute slot `type` and `valueType` properties that resolve to external artefacts, and in `aliases` values. Every external reference that appears in the class definition MUST appear in `dependencies`, and vice versa (rule D01).
+### 14.2 Edge Types
 
-### 14.2 Within-Namespace Short Names
+Edges arise from the following sources:
 
-Where tooling allows short names (class name without namespace or version) to be used during authoring, the version range must still be supplied in the `dependencies` map. When the class is distributed, all short names MUST be expanded to full FQN ranges.
+| Source | Edge meaning |
+|--------|-------------|
+| `extends` property (each entry) | Inheritance dependency: the subclass structurally incorporates the superclass |
+| `object` slot `type` property | Composition dependency: the class embeds instances of another class by value |
+| `class` slot `type` property | Reference dependency: the class refers to instances of another class by identity |
+| `enum` slot `type` property | Enum root dependency: the class references a class as an enum root |
+| `attribute` slot `type` property | Attribute import dependency: the class uses a standalone attribute definition |
+| `list`, `set`, or `map` `valueType`/`keyType` property | Collection element dependency |
+| `aliases` value (each entry) | Alias dependency: the class declares a local name for an inherited or imported attribute |
+| `metadata` object key (each entry) | Metadata schema dependency: the class carries metadata conforming to a metadata schema class |
+
+A self-referential `"self"` token (§4.3) resolves to the declaring class's own FQN once expanded, and is treated identically to an explicit self-referential FQN for edge purposes.
+
+Tools MAY distinguish edge types in visualisations and impact analysis.
 
 ### 14.3 Version Range Syntax
 
-OOML adopts the npm-compatible semver version range syntax for expressing version constraints in dependency declarations:
+OOML adopts the npm-compatible semver version range syntax for expressing version constraints wherever an FQN range appears (`extends`, attribute slot `type`/`valueType`/`keyType`, `aliases` values, `metadata` keys):
 
 | Specifier | Meaning |
 |-----------|---------|
@@ -1142,58 +1125,17 @@ OOML adopts the npm-compatible semver version range syntax for expressing versio
 
 For MAJOR version 0, `^0.y.z` is treated as `~0.y.z`, reflecting the initial-development instability convention.
 
-### 14.4 Self-Reference
+### 14.4 Acyclicity
 
-A class MUST NOT declare a dependency on itself, directly or transitively. This is enforced by the acyclicity rule (D03).
+The dependency graph MUST be acyclic across `extends`, `object`, `attribute-import`, and `metadata` edges. Self-referential `class` and `enum` slot edges — including those declared via `"self"` — are exempt: they are class-hierarchy references, not structural embedding, and do not constitute a definition cycle (see §19.6 for the underlying rationale).
 
-> **Note:** Version range resolution — determining which specific version satisfies a declared range — is the concern of any distribution or tooling system built on OOML, not of this specification.
+### 14.5 Resolution
 
----
+The OOML language defines the *structure* of dependencies: which artefacts depend on which other artefacts, and under what version constraints, as derived from a class's own body. The *resolution* of those dependencies — fetching specific versions, selecting among multiple candidates that satisfy overlapping ranges, and handling version conflicts — is the concern of any distribution or tooling system built on OOML and is outside the scope of this specification.
 
-## 15. The Dependency Graph
+### 14.6 Dependency Insight
 
-### 15.1 Structure
-
-The OOML dependency graph is a directed acyclic graph (DAG) where:
-
-- **Nodes** are class and attribute definition versions, identified by their exact FQN (including version).
-- **Edges** are directed from a dependent to its dependency, labelled with the version range declared in the dependent's `dependencies` property.
-
-There are no package nodes. Every node is an individual versioned class or attribute definition. The dependency graph is a logical structure defined by the language; how it is traversed or resolved is outside the scope of this specification.
-
-### 15.2 Edge Types
-
-Edges arise from the following sources:
-
-| Source | Edge meaning |
-|--------|-------------|
-| `extends` property (each entry) | Inheritance dependency: the subclass structurally incorporates the superclass |
-| `object` slot `type` property | Composition dependency: the class embeds instances of another class by value |
-| `class` slot `type` property | Reference dependency: the class refers to instances of another class by identity |
-| `enum` slot `type` property | Enum root dependency: the class references a class as an enum root |
-| `attribute` slot `type` property | Attribute import dependency: the class uses a standalone attribute definition |
-| `list`, `set`, or `map` `valueType` property | Collection element dependency |
-| `aliases` value (each entry) | Alias dependency: the class declares a local name for an inherited or imported attribute |
-
-Tools MAY distinguish edge types in visualisations and impact analysis.
-
-### 15.3 Acyclicity
-
-The dependency graph MUST be acyclic across `extends`, `object`, and `attribute-import` edges. Self-referential `class` and `enum` slot edges are exempt (they are class-hierarchy references, not structural embedding).
-
-### 15.4 Resolution Algorithm
-
-Given a class C to resolve:
-
-1. Retrieve C's exact version from the resolution context.
-2. For each entry in C's `dependencies`, resolve the version range to the highest published version satisfying the range.
-3. Recurse into each resolved dependency.
-4. Detect cycles: if C appears in its own transitive dependency chain via `extends`, `object`, or `attribute` edges, abort with an error. Self-referential `class` attribute slot edges are excluded from cycle detection.
-5. Where the same class appears via multiple dependency paths at potentially different resolved versions, apply **minimum version selection**: use the highest minimum version required across all paths, provided it satisfies all declared ranges. If no single version satisfies all constraints, report a conflict.
-
-### 15.5 Dependency Insight
-
-Because the dependency graph is a flat graph of class nodes with no package-level indirection, the following queries are structurally straightforward for any tooling system that indexes the graph:
+Because the dependency graph is a flat graph of class nodes with no package-level indirection, the following queries are structurally straightforward for any tooling system that indexes the (derived) graph:
 
 | Query | How |
 |-------|-----|
@@ -1208,11 +1150,11 @@ Because the dependency graph is a flat graph of class nodes with no package-leve
 ---
 
 
-## 16. Serialisation Format
+## 15. Serialisation Format
 
 OOML artefacts (classes and attribute definitions) are serialised as UTF-8 encoded JSON.
 
-### 16.1 Omission-Over-Default Convention
+### 15.1 Omission-Over-Default Convention
 
 Optional properties whose value equals their declared default SHOULD be omitted rather than stated explicitly. This applies across all artefact types:
 
@@ -1236,7 +1178,7 @@ A property that carries only its default value adds noise without information. O
 
 Conformant parsers MUST accept explicit defaults — the convention is a SHOULD for authors, not a MUST for parsers.
 
-### 16.2 Formatting Conventions
+### 15.2 Formatting Conventions
 
 The following formatting conventions are RECOMMENDED for canonical output:
 
@@ -1249,11 +1191,11 @@ These are informative conventions. Parsers MUST accept any valid JSON.
 
 ---
 
-## 17. Validation Rules
+## 16. Validation Rules
 
 An OOML artefact (class or attribute definition) is **valid** if and only if all applicable rules below pass. Conformant tools MUST enforce these rules when processing artefacts and SHOULD enforce them during authoring.
 
-### 17.1 Structural Rules
+### 16.1 Structural Rules
 
 | Rule ID | Description |
 |---------|-------------|
@@ -1272,7 +1214,7 @@ An OOML artefact (class or attribute definition) is **valid** if and only if all
 | S11 | A `static` attribute slot MUST NOT have `required: true`. (Since the default is `false`, omitting `required` on a static slot is always correct.) |
 | S12 | A `static` attribute slot MUST NOT have `nullable: true`. |
 
-### 17.2 Type Rules
+### 16.2 Type Rules
 
 | Rule ID | Description |
 |---------|-------------|
@@ -1285,7 +1227,7 @@ An OOML artefact (class or attribute definition) is **valid** if and only if all
 | T07 | When `valueKind` is `object`, `class`, or `enum`, `valueType` MUST resolve to a known class. When `valueKind` is `attribute`, `valueType` MUST resolve to a known attribute definition. For `valueKind: "enum"`, valid values are subtypes of the resolved class, excluding the resolved class itself. |
 | T08 | The `keyType` on a `map` slot MUST be a primitive type name from §7. |
 
-### 17.3 Inheritance Rules
+### 16.3 Inheritance Rules
 
 | Rule ID | Description |
 |---------|-------------|
@@ -1296,7 +1238,7 @@ An OOML artefact (class or attribute definition) is **valid** if and only if all
 | I05 | A class marked `abstract: false` MUST provide (via its own or inherited slots) all required non-`local` attribute slots needed for instantiation. |
 | I06 | A class MUST NOT declare an attribute slot that shadows a `final: true` slot in any ancestor. |
 
-### 17.4 Alias Rules
+### 16.4 Alias Rules
 
 | Rule ID | Description |
 |---------|-------------|
@@ -1306,7 +1248,7 @@ An OOML artefact (class or attribute definition) is **valid** if and only if all
 | A04 | An alias name MUST NOT collide with the unambiguous canonical local name of any attribute in the class's resolved set. |
 | A05 | A subclass MUST NOT declare an alias name already used by any ancestor for a different attribute FQN. |
 
-### 17.5 Metadata Rules
+### 16.5 Metadata Rules
 
 | Rule ID | Description |
 |---------|-------------|
@@ -1317,16 +1259,15 @@ An OOML artefact (class or attribute definition) is **valid** if and only if all
 | M05 | The `value` of a metadata entry MUST conform to the type declared for that attribute slot in the metadata schema class. |
 | M06 | Each key in the `metadata` object MUST be a syntactically valid FQN range resolving to a known class within the resolution context. |
 
-### 17.6 Dependency Rules
+### 16.6 Dependency Rules
 
 | Rule ID | Description |
 |---------|-------------|
-| D01 | The `dependencies` map MUST contain exactly the set of external FQN base names referenced in `extends`, in all attribute slot `type` and `valueType` properties that resolve to external artefacts, in `aliases` values, and in all `metadata` object keys. No more, no fewer. |
-| D02 | All version ranges in `dependencies` MUST be syntactically valid per §15.3. |
-| D03 | The dependency graph MUST be acyclic across `extends`, `object`, `attribute-import`, and `metadata` edges. Self-referential `class` and `enum` slot edges are exempt (they are class-hierarchy references, not structural embedding). |
-| D04 | All declared version ranges SHOULD be satisfiable by at least one known artefact version within the resolution context at the time of validation. |
+| D01 | All version ranges appearing in `extends`, attribute slot `type`/`valueType`/`keyType` properties, `aliases` values, and `metadata` object keys MUST be syntactically valid per §14.3. |
+| D02 | The dependency graph, derived from `extends`, `object`, `attribute-import`, and `metadata` edges, MUST be acyclic. Self-referential `class` and `enum` slot edges are exempt (they are class-hierarchy references, not structural embedding). |
+| D03 | All referenced version ranges SHOULD be satisfiable by at least one known artefact version within the resolution context at the time of validation. |
 
-### 17.7 Versioning Rules
+### 16.7 Versioning Rules
 
 | Rule ID | Description |
 |---------|-------------|
@@ -1337,11 +1278,11 @@ An OOML artefact (class or attribute definition) is **valid** if and only if all
 
 ---
 
-## 18. Complete Example
+## 17. Complete Example
 
 The following example demonstrates multi-inheritance, standalone attribute definitions, aliases, and metadata. All artefacts are shown in their distributed form with full FQNs.
 
-### 18.1 Standalone Attribute Definition and Enum Root
+### 17.1 Standalone Attribute Definition and Enum Root
 
 `Salary` is published as a standalone attribute definition, usable by any class:
 
@@ -1417,7 +1358,7 @@ A metadata schema class `HrSchemaInfo` is published as an ordinary class:
 }
 ```
 
-### 18.2 Example Distributed Class
+### 17.2 Example Distributed Class
 
 `Employee` as a standalone distributed artefact with all short names expanded to full FQN ranges:
 
@@ -1432,12 +1373,6 @@ A metadata schema class `HrSchemaInfo` is published as an ordinary class:
 	"extends": ["com.example.hr/Person@^1.0.0"],
 	"aliases": {
 		"salary": "com.example.finance/Salary@^1.0.0"
-	},
-	"dependencies": {
-		"com.example.hr/Person": "^1.0.0",
-		"com.example.hr/Department": "^1.0.0",
-		"com.example.hr/EmploymentType": "^1.0.0",
-		"com.example.finance/Salary": "^1.0.0"
 	},
 	"attributes": {
 		"employeeNumber": {
@@ -1497,7 +1432,7 @@ A metadata schema class `HrSchemaInfo` is published as an ordinary class:
 }
 ```
 
-### 18.3 Type Hierarchy
+### 17.3 Type Hierarchy
 
 With multi-inheritance, the hierarchy is a DAG rather than a tree:
 
@@ -1542,7 +1477,7 @@ Full resolved attribute surface of an `Employee` instance (in MRO order):
 | `annualSalary` / `salary` *(alias)* | `Employee` | `com.example.finance/Salary@1.0.0` |
 | `schemaVersion` | `Employee` | `com.example.hr/Employee@1.2.0#schemaVersion` |
 
-### 18.4 Dependency Graph
+### 17.4 Dependency Graph
 
 ```
 com.example.hr/Employee@1.2.0
@@ -1582,7 +1517,7 @@ Result:
 
 ---
 
-## 19. Grammar (ABNF)
+## 18. Grammar (ABNF)
 
 The following ABNF provides a normative grammar for the non-JSON structural elements of OOML.
 
@@ -1613,7 +1548,7 @@ class-fqn        = namespace "/" class-name    "@" version
 attrdef-fqn      = namespace "/" attrdef-name  "@" version
 owned-attr-fqn   = class-fqn "#" attr-slot-name  ; inline-owned slots only
 
-; FQN range (used in extends, type properties, aliases, dependencies map)
+; FQN range (used in extends, type properties, aliases, metadata keys)
 class-fqn-range   = namespace "/" class-name   "@" version-range
 attrdef-fqn-range = namespace "/" attrdef-name "@" version-range
 
@@ -1641,13 +1576,13 @@ SP     = %x20
 
 ---
 
-## 20. Design Notes and Rationale
+## 19. Design Notes and Rationale
 
-### 20.1 Why JSON?
+### 19.1 Why JSON?
 
 JSON is universally supported, human-editable, and requires no specialist tooling to read or write. Alternatives such as YAML or TOML were considered but introduce ambiguities (YAML's multi-document files, TOML's table-ordering behaviour) that complicate deterministic parsing.
 
-### 20.2 Why multi-inheritance, and why does the diamond problem not apply?
+### 19.2 Why multi-inheritance, and why does the diamond problem not apply?
 
 OOML adopts multi-inheritance because real-world modelling requires orthogonal concerns to be composable independently of the primary taxonomic hierarchy. The `Commentable`, `Auditable`, `Taggable` pattern is ubiquitous in practice, and single inheritance forces either combinatorial class explosion or pollution of base classes with concerns that only some subtypes need.
 
@@ -1655,33 +1590,33 @@ The classical diamond problem — where two ancestors provide different definiti
 
 The only genuine diamond case — where two ancestors both reference the exact same attribute definition FQN — is resolved by deduplication: the attribute appears once in the resolved set. No precedence rule is needed.
 
-### 20.3 Why is the class (not a collection) the unit of versioning?
+### 19.3 Why is the class (not a collection) the unit of versioning?
 
 See the detailed rationale in the §0.2.0 changelog above. The short form: a versioned collection (package/model) creates a coarse, lossy dependency signal and turns dependency insight queries into expensive content-scanning operations. A flat registry of individually versioned classes makes those queries O(1) index lookups. Data models, unlike software libraries, have no holistic runtime behaviour that needs to be tested at collection level, so there is nothing lost by removing the collection as a versioning unit.
 
-### 20.4 Why are authoring workflows not part of the language specification?
+### 19.4 Why are authoring workflows not part of the language specification?
 
 How classes are authored, grouped, and published before they become distributed artefacts is a tooling concern, not a language concern. Different tools may use file-based authoring, visual designers, database-backed editors, or direct JSON editing. The language defines only what a valid distributed artefact looks like. Authoring conventions are addressed in a separate tooling document.
 
-### 20.5 Why are enumerations not a first-class artefact type?
+### 19.5 Why are enumerations not a first-class artefact type?
 
 Early versions of this specification included a dedicated `Enumeration` artefact type. This was removed in 0.4.0 because enumerations are fully subsumed by the class type hierarchy. A class serves as the enumeration root; its subtypes (excluding itself) are the members. This approach reduces the language surface, keeps the number of artefact types minimal, and gives enumeration members genuine expressive power — they can carry attributes, participate in further type hierarchies, and be independently versioned. The `"kind": "enum"` attribute slot preserves the enumerative constraint (subtypes of the root, excluding the root itself) without requiring a separate artefact type.
 
-### 20.6 Why are self-referential `class` and `enum` attribute slots exempt from cycle detection?
+### 19.6 Why are self-referential `class` and `enum` attribute slots exempt from cycle detection?
 
 A `class` or `enum` slot holds a reference to a class in the type hierarchy, not a structural embedding of that class's definition. A class declaring a `class` slot whose `type` is itself — or an ancestor of itself — is expressing a data-level relationship: "the value of this slot is a reference to this class or one of its subtypes." The class does not need to structurally contain or inherit from itself to express this. Similarly, an `enum` slot whose root is an ancestor of the declaring class is simply recording that the slot's value must be chosen from a known set of classes — not that the declaring class structurally depends on itself. Only `object` and `attribute-import` slots create structural embedding dependencies that can form genuine definition cycles.
 
-### 20.7 Why `self` resolves to the declaring class rather than the inheriting class
+### 19.7 Why `self` resolves to the declaring class rather than the inheriting class
 
 Making `self` covariant — where `self` in a superclass slot resolves to the subclass in each inheriting context — would mean a slot effectively has a different type at each level of the hierarchy. This is a form of implicit type override, which conflicts with OOML's explicit no-override rule (§11.2 rule 3). It also complicates the dependency graph: a covariant `self` slot would create a dependency from every subclass to itself, which is circular.
 
 Non-covariant `self` keeps the semantics simple: the slot is typed to the declaring class, and any subclass that wants a self-typed slot with its own type may declare one explicitly. The inherited slot and the new slot have different types and different slot names, which is unambiguous.
 
-### 20.8 Why use OOML itself as the metadata modelling language?
+### 19.8 Why use OOML itself as the metadata modelling language?
 
 The alternative — restricting metadata to string key-value pairs — would make metadata human-readable but machine-opaque. A consuming tool could display a `schemaStatus` string but could not validate it, query it structurally, or depend on it with type safety. By using OOML classes as metadata schemas, the metadata system inherits the full capability of the language at no additional specification cost: versioning, inheritance, type safety, registry publication, and dependency tracking all apply automatically. The OSDU interoperability case illustrates this clearly — OSDU-specific schema properties that OOML does not natively support can be carried as typed, versioned metadata rather than freeform strings, enabling tooling to reason about them with the same machinery it uses for native OOML concepts. Metadata schemas are ordinary OOML classes and are managed identically to any other class.
 
-### 20.9 Relationship to OWL/RDF
+### 19.9 Relationship to OWL/RDF
 
 OWL and RDF provide powerful formal semantics including open-world assumption, reasoning, and logical inference. OOML deliberately adopts the closed-world assumption common in OOP: a class defines exactly the attributes it declares plus what it inherits, and no more. This tradeoff sacrifices some expressive power for significantly greater accessibility and tooling simplicity.
 
