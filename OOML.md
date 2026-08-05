@@ -175,7 +175,7 @@ Examples:
 com.example.hr/Employee@1.2.0
 com.example.hr/Employee@1.2.0#employeeNumber
 com.example.hr/EmploymentStatus@1.0.0
-com.example.physics/Temperature@1.0.0
+com.example.physics/temperature@1.0.0
 ```
 
 The namespace alone scopes all artefact names. There is no intermediate model or package layer in the identity structure. Global uniqueness of FQNs is guaranteed by the reverse-domain namespace convention combined with the namespace governance policy of any distribution system built on OOML.
@@ -215,8 +215,8 @@ When committed as `com.example.hr/Employee@1.3.0`, the above expands to:
 ### 4.4 Uniqueness Constraints
 
 - A class name MUST be unique within a namespace (i.e. `com.example.hr/Employee` identifies a single evolving class, versioned over time).
-
 - A global attribute name MUST be unique within a namespace.
+- Because class names are PascalCase and global attribute names are camelCase (see §4.5), a class and a global attribute can never share an identical name within the same namespace — the two uniqueness constraints above never need to be checked against each other.
 - Inline attribute identifiers MUST be unique within the class that declares them.
 - Inline attribute identifiers MUST NOT collide with any alias declared by the same class (rule A03).
 - The full accessible name surface of a class — its own attribute identifiers, its inherited attribute identifiers (by their canonical local names where unambiguous), and its aliases — MUST be collision-free after alias resolution (rule A04).
@@ -227,7 +227,7 @@ When committed as `com.example.hr/Employee@1.3.0`, the above expands to:
 |----------|------------|---------|
 | Namespace segment | lowercase alphanumeric | `[a-z][a-z0-9]*` |
 | Class name | PascalCase | `[A-Z][A-Za-z0-9]*` |
-| Global attribute name | PascalCase | `[A-Z][A-Za-z0-9]*` |
+| Global attribute name | camelCase | `[a-z][a-zA-Z0-9]*` |
 | Attribute identifier | camelCase | `[a-z][a-zA-Z0-9]*` |
 | Alias name | camelCase | `[a-z][a-zA-Z0-9]*` |
 
@@ -367,7 +367,7 @@ OOML defines the following built-in primitive types. Implementations MUST suppor
 
 Global attributes are first-class, independently versioned artefacts. A global attribute describes a reusable, typed semantic contract for a named attribute — independent of any class. Any class may reference a global attribute in an attribute of `"kind": "attribute"`.
 
-Global attributes are appropriate for domain concepts that are genuinely global: `UnitOfMeasure`, `MonetaryAmount`, `GeoCoordinate`, `IsoLanguageCode`. They are not appropriate for attributes that are intrinsic to a specific class and have no meaning outside it.
+Global attributes are appropriate for domain concepts that are genuinely global: `unitOfMeasure`, `monetaryAmount`, `geoCoordinate`, `isoLanguageCode`. They are not appropriate for attributes that are intrinsic to a specific class and have no meaning outside it.
 
 ### 7.1 Global Attribute Structure
 
@@ -376,7 +376,7 @@ A global attribute is a JSON object published as a standalone artefact:
 ```json
 {
 	"ooml": "0.1.0",
-	"fqn": "com.example.physics/Temperature@1.0.0",
+	"fqn": "com.example.physics/temperature@1.0.0",
 	"name": "Temperature",
 	"description": "A temperature measurement.",
 	"authors": ["Jane Smith <jane@example.com>"],
@@ -413,9 +413,9 @@ The FQN of a global attribute follows the same pattern as a class FQN:
 global-attr-fqn = namespace "/" global-attr-name "@" version
 ```
 
-Example: `com.example.physics/Temperature@1.0.0`
+Example: `com.example.physics/temperature@1.0.0`
 
-The name uses PascalCase (same as class names) to signal that it is a named artefact in the identity model, not an instance-level attribute identifier.
+The name uses camelCase, distinct from a class name's PascalCase. This is a deliberate choice: a global attribute is not a type — it is never instantiated, extended, or used as an enum root — so it does not carry the "type-ness" that PascalCase signals for classes throughout OOML. camelCase instead aligns a global attribute's name with the attribute identifiers it is functionally equivalent to (§9.1), and it has a structural benefit: because classes and global attributes now use disjoint casing conventions, a class and a global attribute can never share an identical name within the same namespace (§4.4). Given an FQN alone, its casing already tells you which of the two artefact types it identifies, without needing to resolve it first.
 
 ### 7.4 Referencing a Global Attribute in a Class
 
@@ -424,14 +424,14 @@ An attribute references a standalone global attribute using `"kind": "attribute"
 ```json
 "surfaceTemp": {
 	"kind": "attribute",
-	"type": "com.example.physics/Temperature@^1.0.0",
+	"type": "com.example.physics/temperature@^1.0.0",
 	"name": "Surface Temperature",
 	"description": "The surface temperature of this body.",
 	"nullable": true
 }
 ```
 
-The attribute identifier (`surfaceTemp`) is the local name within the class. The global attribute's identity is `com.example.physics/Temperature@^1.0.0`. The two are independent: the attribute identifier is how instances are navigated; the global attribute FQN is how the semantic contract is referenced and versioned.
+The attribute identifier (`surfaceTemp`) is the local name within the class. The global attribute's identity is `com.example.physics/temperature@^1.0.0`. The two are independent: the attribute identifier is how instances are navigated; the global attribute FQN is how the semantic contract is referenced and versioned.
 
 ### 7.5 Versioning of Global Attributes
 
@@ -509,7 +509,7 @@ The JSON property name used as the key in a class's `attributes` object is the *
 | **Attribute identifier** | `employeeNumber` | The JSON key in the `attributes` object. Follows `[a-z][a-zA-Z0-9]*`. Locally scoped to the class. Used by tooling, code generation, and instance navigation. |
 | **`name` property** | `"Employee Number"` | The free-form human-readable label. Unconstrained. Used in UIs and documentation. |
 | **Owned attribute FQN** | `com.example.hr/Employee@1.2.0#employeeNumber` | The globally unique identity of this attribute. Composed of the class FQN and the attribute identifier. |
-| **Referenced global attribute FQN** | `com.example.finance/Salary@1.0.0` | When `"kind": "attribute"`, the FQN of the standalone global attribute being referenced. Independent of the attribute identifier. |
+| **Referenced global attribute FQN** | `com.example.finance/salary@1.0.0` | When `"kind": "attribute"`, the FQN of the standalone global attribute being referenced. Independent of the attribute identifier. |
 
 The attribute identifier and the `name` often convey the same concept in different forms (`employeeNumber` / `"Employee Number"`), but they are independent: the attribute identifier is a syntactic key, the `name` is a human label.
 
@@ -730,7 +730,7 @@ When `keyKind` and `keyType` are omitted the map has `primitive`/`string` keys �
 	"keyKind": "enum",
 	"keyType": "com.example.hr/EmploymentType@^1.0.0",
 	"valueKind": "attribute",
-	"valueType": "com.example.finance/Salary@^1.0.0",
+	"valueType": "com.example.finance/salary@^1.0.0",
 	"name": "Salary By Employment Type",
 	"description": "Standard salary for each employment type."
 }
@@ -754,7 +754,7 @@ An attribute that references a standalone global attribute (see §9). The attrib
 ```json
 "surfaceTemp": {
 	"kind": "attribute",
-	"type": "com.example.physics/Temperature@^1.0.0",
+	"type": "com.example.physics/temperature@^1.0.0",
 	"name": "Surface Temperature",
 	"description": "Surface temperature of this celestial body.",
 	"nullable": true
@@ -993,7 +993,7 @@ An alias is a locally-scoped accessor name that a class declares for an attribut
 
 1. **Disambiguate local name collisions.** When two inherited attributes share a local attribute identifier (but have different FQNs), neither is accessible by that name without an alias.
 2. **Provide ergonomic names.** When a canonical attribute name is verbose or contextually awkward, an alias gives the class author control over the local interface.
-3. **Expose imported global attributes under class-appropriate names.** A standalone global attribute has a PascalCase name in the identity model (e.g. `Temperature`); an alias gives it a camelCase attribute-style name in context (e.g. `surfaceTemperature`).
+3. **Expose imported global attributes under class-appropriate names.** A standalone global attribute often carries a generic, domain-wide name (e.g. `temperature`); an alias gives it a more specific, context-appropriate name (e.g. `surfaceTemperature`) without altering the underlying attribute's identity or contract.
 
 ### 12.2 Alias Declaration
 
@@ -1010,8 +1010,8 @@ Aliases are declared in the `aliases` property of a class definition, as a JSON 
 		"com.example.planets/Core@^1.0.0"
 	],
 	"aliases": {
-		"surfaceTemperature": "com.example.physics/Temperature@^1.0.0",
-		"coreTemperature":    "com.example.geology/CoreTemperature@^1.0.0"
+		"surfaceTemperature": "com.example.physics/temperature@^1.0.0",
+		"coreTemperature":    "com.example.geology/coreTemperature@^1.0.0"
 	}
 }
 ```
@@ -1205,7 +1205,8 @@ An OOML artefact (class or global attribute) is **valid** if and only if all app
 |---------|-------------|
 | S01 | The `ooml` property MUST be a valid semver string identifying a known specification version. |
 | S02 | The namespace portion of `fqn` MUST match `[a-z][a-z0-9]*(\.[a-z][a-z0-9]*)+`. |
-| S03 | The class or global attribute name portion of `fqn` MUST match `[A-Z][A-Za-z0-9]*`. |
+| S03 | For a class, the name portion of `fqn` MUST match `[A-Z][A-Za-z0-9]*` (PascalCase). |
+| S03b | For a global attribute, the name portion of `fqn` MUST match `[a-z][a-zA-Z0-9]*` (camelCase). |
 | S03a | The `name` property MUST be present and non-empty on all artefacts (classes and global attributes). |
 | S04 | The version portion of `fqn` MUST be a valid, exact (non-range) semver string. |
 | S05 | Attribute identifiers MUST match `[a-z][a-zA-Z0-9]*` (camelCase). |
@@ -1288,12 +1289,12 @@ The following example demonstrates multi-inheritance, standalone global attribut
 
 ### 17.1 Standalone Global Attribute and Enum Root
 
-`Salary` is published as a standalone global attribute, usable by any class:
+`salary` is published as a standalone global attribute, usable by any class:
 
 ```json
 {
 	"ooml": "0.1.0",
-	"fqn": "com.example.finance/Salary@1.0.0",
+	"fqn": "com.example.finance/salary@1.0.0",
 	"name": "Annual Salary",
 	"description": "An annual gross salary amount in the organisation's base currency.",
 	"kind": "primitive",
@@ -1376,7 +1377,7 @@ A metadata schema class `HrSchemaInfo` is published as an ordinary class:
 	"license": "Apache-2.0",
 	"extends": ["com.example.hr/Person@^1.0.0"],
 	"aliases": {
-		"salary": "com.example.finance/Salary@^1.0.0"
+		"salary": "com.example.finance/salary@^1.0.0"
 	},
 	"attributes": {
 		"employeeNumber": {
@@ -1421,7 +1422,7 @@ A metadata schema class `HrSchemaInfo` is published as an ordinary class:
 		},
 		"annualSalary": {
 			"kind": "attribute",
-			"type": "com.example.finance/Salary@^1.0.0",
+			"type": "com.example.finance/salary@^1.0.0",
 			"name": "Annual Salary",
 			"description": "Annual gross salary. Aliased as 'salary' for ergonomic access.",
 			"nullable": true
@@ -1478,7 +1479,7 @@ Full resolved attribute surface of an `Employee` instance (in MRO order):
 | `endDate` | `Employee` | `com.example.hr/Employee@1.2.0#endDate` |
 | `department` | `Employee` | `com.example.hr/Employee@1.2.0#department` |
 | `manager` | `Employee` | `com.example.hr/Employee@1.2.0#manager` |
-| `annualSalary` / `salary` *(alias)* | `Employee` | `com.example.finance/Salary@1.0.0` |
+| `annualSalary` / `salary` *(alias)* | `Employee` | `com.example.finance/salary@1.0.0` |
 | `schemaVersion` | `Employee` | `com.example.hr/Employee@1.2.0#schemaVersion` |
 
 ### 17.4 Dependency Graph
@@ -1489,8 +1490,8 @@ com.example.hr/Employee@1.2.0
   --[class]-->            com.example.hr/Department@^1.0.0
   --[class]-->            com.example.hr/Employee@^1.2.0   (self-reference; exempt)
   --[enum]-->             com.example.hr/EmploymentType@^1.0.0
-  --[attribute-import]--> com.example.finance/Salary@^1.0.0
-  --[alias]-->            com.example.finance/Salary@^1.0.0
+  --[attribute-import]--> com.example.finance/salary@^1.0.0
+  --[alias]-->            com.example.finance/salary@^1.0.0
 
 com.example.hr/Person@1.0.0
   --[extends]-->   com.example.hr/Party@^1.1.0
@@ -1514,7 +1515,7 @@ Result (from any tooling that indexes the dependency graph):
 - `com.example.hr/Contractor@1.0.0` (set element class edge)
 - `com.example.hr/Department@1.0.0` (self-reference class edge)
 
-**Example dependency insight query:** "What directly depends on `com.example.finance/Salary@1.0.0`?"
+**Example dependency insight query:** "What directly depends on `com.example.finance/salary@1.0.0`?"
 
 Result:
 - `com.example.hr/Employee@1.2.0` (attribute-import edge and alias edge)
@@ -1532,7 +1533,7 @@ lc-segment        = LOWER *( LOWER / DIGIT )
 
 ; Names
 class-name        = UPPER *( ALPHA / DIGIT )        ; PascalCase (classes and enum roots)
-global-attr-name  = UPPER *( ALPHA / DIGIT )        ; PascalCase
+global-attr-name  = LOWER *( ALPHA / DIGIT )        ; camelCase
 attr-name         = LOWER *( ALPHA / DIGIT )        ; camelCase
 alias-name        = LOWER *( ALPHA / DIGIT )        ; camelCase
 group-name        = LOWER *( LOWER / DIGIT / "-" )

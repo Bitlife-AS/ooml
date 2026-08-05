@@ -1,8 +1,8 @@
 {
 	"$schema": "https://json-schema.org/draft/2020-12/schema",
 	"$id": "https://ooml.org/schema/ooml.0.1.0.json",
-	"title": "OOML 0.1.0 \u2014 Object-Oriented Modeling Language schema",
-	"description": "An OOML document is one of: a class artefact or an attribute definition artefact. Discrimination is by the presence of top-level 'kind' (attribute definition) vs its absence (class).",
+	"title": "OOML 0.1.0 Artefact Schema",
+	"description": "An OOML document is one of: a class artefact or a global attribute artefact. Discrimination is by the presence of top-level 'kind' (global attribute) vs its absence (class).",
 	"$defs": {
 		"semver": {
 			"type": "string",
@@ -21,32 +21,37 @@
 		},
 		"artefactName": {
 			"type": "string",
-			"description": "PascalCase artefact name (class or attribute definition).",
+			"description": "PascalCase artefact name (classes and enum roots).",
 			"pattern": "^[A-Z][A-Za-z0-9]*$"
+		},
+		"globalAttrName": {
+			"type": "string",
+			"description": "camelCase global attribute name.",
+			"pattern": "^[a-z][a-zA-Z0-9]*$"
 		},
 		"classFqn": {
 			"type": "string",
 			"description": "Exact FQN of a class: namespace/ClassName@version",
 			"pattern": "^[a-z][a-z0-9]*(\\.[a-z][a-z0-9]*)*/[A-Z][A-Za-z0-9]*@(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*).*$"
 		},
-		"attrdefFqn": {
+		"globalAttrFqn": {
 			"type": "string",
-			"description": "Exact FQN of an attribute definition: namespace/AttrName@version",
-			"pattern": "^[a-z][a-z0-9]*(\\.[a-z][a-z0-9]*)*/[A-Z][A-Za-z0-9]*@(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*).*$"
+			"description": "Exact FQN of a global attribute: namespace/attrName@version",
+			"pattern": "^[a-z][a-z0-9]*(\\.[a-z][a-z0-9]*)*/[a-z][a-zA-Z0-9]*@(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*).*$"
 		},
 		"classFqnRange": {
 			"type": "string",
 			"description": "FQN range referencing a class: namespace/ClassName@versionRange or 'self'.",
 			"pattern": "^(self|[a-z][a-z0-9]*(\\.[a-z][a-z0-9]*)*/[A-Z][A-Za-z0-9]*@.+)$"
 		},
-		"attrdefFqnRange": {
+		"globalAttrFqnRange": {
 			"type": "string",
-			"description": "FQN range referencing an attribute definition: namespace/AttrName@versionRange.",
-			"pattern": "^[a-z][a-z0-9]*(\\.[a-z][a-z0-9]*)*/[A-Z][A-Za-z0-9]*@.+$"
+			"description": "FQN range referencing a global attribute: namespace/attrName@versionRange.",
+			"pattern": "^[a-z][a-z0-9]*(\\.[a-z][a-z0-9]*)*/[a-z][a-zA-Z0-9]*@.+$"
 		},
-		"slotIdentifier": {
+		"attributeIdentifier": {
 			"type": "string",
-			"description": "camelCase attribute slot identifier.",
+			"description": "camelCase attribute identifier.",
 			"pattern": "^[a-z][a-zA-Z0-9]*$"
 		},
 		"aliasName": {
@@ -81,9 +86,9 @@
 				"any"
 			]
 		},
-		"slotKind": {
+		"attributeKind": {
 			"type": "string",
-			"description": "Structural role of an attribute slot.",
+			"description": "Structural role of an attribute.",
 			"enum": [
 				"primitive",
 				"object",
@@ -182,7 +187,7 @@
 		},
 		"metadataSchemaValue": {
 			"type": "object",
-			"description": "A metadata entry object: keys are attribute slot names of the schema class; values are metadata entries.",
+			"description": "A metadata entry object: keys are attribute names of the schema class; values are metadata entries.",
 			"additionalProperties": {
 				"$ref": "#/$defs/metadataEntry"
 			}
@@ -204,39 +209,39 @@
 				"$ref": "#/$defs/classFqnRange"
 			}
 		},
-		"commonSlotProperties": {
-			"description": "Properties shared by all attribute slot kinds.",
+		"commonAttributeProperties": {
+			"description": "Properties shared by all attribute kinds.",
 			"properties": {
 				"name": {
 					"$ref": "#/$defs/nonEmptyString",
-					"description": "Free-form human-readable label for this attribute slot."
+					"description": "Free-form human-readable label for this attribute."
 				},
 				"description": {
 					"$ref": "#/$defs/nonEmptyString",
-					"description": "Human-readable purpose of this attribute slot."
+					"description": "Human-readable purpose of this attribute."
 				},
 				"required": {
 					"type": "boolean",
-					"description": "Whether instances MUST carry a value for this slot. Default: false. Must not be true on static slots."
+					"description": "Whether instances MUST carry a value for this attribute. Default: false. Must not be true on static attributes."
 				},
 				"nullable": {
 					"type": "boolean",
-					"description": "Whether the instance-level value may be null. Default: false. Must not be true on static slots."
+					"description": "Whether the instance-level value may be null. Default: false. Must not be true on static attributes."
 				},
 				"static": {
 					"type": "boolean",
 					"description": "If true, the value belongs to the class rather than instances. Default: false."
 				},
 				"value": {
-					"description": "The class-level value for a static slot. Must not appear on non-static slots."
+					"description": "The class-level value for a static attribute. Must not appear on non-static attributes."
 				},
 				"local": {
 					"type": "boolean",
-					"description": "If true, this slot is not inherited by subclasses. Default: false."
+					"description": "If true, this attribute is not inherited by subclasses. Default: false."
 				},
 				"final": {
 					"type": "boolean",
-					"description": "If true, subclasses cannot shadow or redeclare this slot. Default: false."
+					"description": "If true, subclasses cannot shadow or redeclare this attribute. Default: false."
 				},
 				"deprecated": {
 					"$ref": "#/$defs/nonEmptyString",
@@ -247,11 +252,11 @@
 				"name"
 			]
 		},
-		"primitiveSlot": {
-			"description": "An attribute slot of kind 'primitive'.",
+		"primitiveAttribute": {
+			"description": "An attribute of kind 'primitive'.",
 			"allOf": [
 				{
-					"$ref": "#/$defs/commonSlotProperties"
+					"$ref": "#/$defs/commonAttributeProperties"
 				},
 				{
 					"type": "object",
@@ -314,11 +319,11 @@
 				}
 			]
 		},
-		"objectSlot": {
-			"description": "An attribute slot of kind 'object': instance reference embedded by value.",
+		"objectAttribute": {
+			"description": "An attribute of kind 'object': instance reference embedded by value.",
 			"allOf": [
 				{
-					"$ref": "#/$defs/commonSlotProperties"
+					"$ref": "#/$defs/commonAttributeProperties"
 				},
 				{
 					"type": "object",
@@ -347,11 +352,11 @@
 				}
 			]
 		},
-		"classSlot": {
-			"description": "An attribute slot of kind 'class': reference to a class itself or any subtype.",
+		"classAttribute": {
+			"description": "An attribute of kind 'class': reference to a class itself or any subtype.",
 			"allOf": [
 				{
-					"$ref": "#/$defs/commonSlotProperties"
+					"$ref": "#/$defs/commonAttributeProperties"
 				},
 				{
 					"type": "object",
@@ -380,11 +385,11 @@
 				}
 			]
 		},
-		"enumSlot": {
-			"description": "An attribute slot of kind 'enum': reference to a strict subtype of the named root class.",
+		"enumAttribute": {
+			"description": "An attribute of kind 'enum': reference to a subtype of the named root class, excluding the named root class itself.",
 			"allOf": [
 				{
-					"$ref": "#/$defs/commonSlotProperties"
+					"$ref": "#/$defs/commonAttributeProperties"
 				},
 				{
 					"type": "object",
@@ -425,7 +430,7 @@
 			]
 		},
 		"collectionValueType": {
-			"description": "Type of collection values: primitive name, class FQN range, attrdef FQN range, or 'self'.",
+			"description": "Type of collection values: primitive name, class FQN range, global attribute FQN range, or 'self'.",
 			"oneOf": [
 				{
 					"$ref": "#/$defs/primitiveTypeName"
@@ -434,15 +439,15 @@
 					"$ref": "#/$defs/classFqnRange"
 				},
 				{
-					"$ref": "#/$defs/attrdefFqnRange"
+					"$ref": "#/$defs/globalAttrFqnRange"
 				}
 			]
 		},
-		"listSlot": {
-			"description": "An attribute slot of kind 'list': ordered sequence allowing duplicates.",
+		"listAttribute": {
+			"description": "An attribute of kind 'list': ordered sequence allowing duplicates.",
 			"allOf": [
 				{
-					"$ref": "#/$defs/commonSlotProperties"
+					"$ref": "#/$defs/commonAttributeProperties"
 				},
 				{
 					"type": "object",
@@ -482,11 +487,11 @@
 				}
 			]
 		},
-		"setSlot": {
-			"description": "An attribute slot of kind 'set': unordered collection without duplicates.",
+		"setAttribute": {
+			"description": "An attribute of kind 'set': unordered collection without duplicates.",
 			"allOf": [
 				{
-					"$ref": "#/$defs/commonSlotProperties"
+					"$ref": "#/$defs/commonAttributeProperties"
 				},
 				{
 					"type": "object",
@@ -526,11 +531,11 @@
 				}
 			]
 		},
-		"mapSlot": {
-			"description": "An attribute slot of kind 'map': key-value pairs with unique keys.",
+		"mapAttribute": {
+			"description": "An attribute of kind 'map': key-value pairs with unique keys.",
 			"allOf": [
 				{
-					"$ref": "#/$defs/commonSlotProperties"
+					"$ref": "#/$defs/commonAttributeProperties"
 				},
 				{
 					"type": "object",
@@ -576,11 +581,11 @@
 				}
 			]
 		},
-		"attributeSlot": {
-			"description": "An attribute slot of kind 'attribute': references a standalone attribute definition.",
+		"globalAttributeReference": {
+			"description": "An attribute of kind 'attribute': references a standalone global attribute.",
 			"allOf": [
 				{
-					"$ref": "#/$defs/commonSlotProperties"
+					"$ref": "#/$defs/commonAttributeProperties"
 				},
 				{
 					"type": "object",
@@ -589,7 +594,7 @@
 							"const": "attribute"
 						},
 						"type": {
-							"$ref": "#/$defs/attrdefFqnRange"
+							"$ref": "#/$defs/globalAttrFqnRange"
 						},
 						"name": {},
 						"description": {},
@@ -609,43 +614,43 @@
 				}
 			]
 		},
-		"anySlot": {
-			"description": "Any attribute slot definition, discriminated by 'kind'.",
+		"anyAttribute": {
+			"description": "Any attribute, discriminated by 'kind'.",
 			"oneOf": [
 				{
-					"$ref": "#/$defs/primitiveSlot"
+					"$ref": "#/$defs/primitiveAttribute"
 				},
 				{
-					"$ref": "#/$defs/objectSlot"
+					"$ref": "#/$defs/objectAttribute"
 				},
 				{
-					"$ref": "#/$defs/classSlot"
+					"$ref": "#/$defs/classAttribute"
 				},
 				{
-					"$ref": "#/$defs/enumSlot"
+					"$ref": "#/$defs/enumAttribute"
 				},
 				{
-					"$ref": "#/$defs/listSlot"
+					"$ref": "#/$defs/listAttribute"
 				},
 				{
-					"$ref": "#/$defs/setSlot"
+					"$ref": "#/$defs/setAttribute"
 				},
 				{
-					"$ref": "#/$defs/mapSlot"
+					"$ref": "#/$defs/mapAttribute"
 				},
 				{
-					"$ref": "#/$defs/attributeSlot"
+					"$ref": "#/$defs/globalAttributeReference"
 				}
 			]
 		},
 		"attributesObject": {
 			"type": "object",
-			"description": "Map of slot identifier (camelCase) to attribute slot definition.",
+			"description": "Map of attribute identifier (camelCase) to attribute.",
 			"propertyNames": {
-				"$ref": "#/$defs/slotIdentifier"
+				"$ref": "#/$defs/attributeIdentifier"
 			},
 			"additionalProperties": {
-				"$ref": "#/$defs/anySlot"
+				"$ref": "#/$defs/anyAttribute"
 			}
 		},
 		"classArtefact": {
@@ -719,25 +724,25 @@
 				]
 			}
 		},
-		"attrdefArtefact": {
+		"globalAttrArtefact": {
 			"type": "object",
-			"description": "A standalone published OOML attribute definition artefact.",
+			"description": "A standalone published OOML global attribute artefact.",
 			"properties": {
 				"ooml": {
 					"$ref": "#/$defs/semver",
 					"description": "OOML specification version this artefact targets."
 				},
 				"fqn": {
-					"$ref": "#/$defs/attrdefFqn",
-					"description": "Fully qualified name and version of this attribute definition."
+					"$ref": "#/$defs/globalAttrFqn",
+					"description": "Fully qualified name and version of this global attribute."
 				},
 				"name": {
 					"$ref": "#/$defs/nonEmptyString",
-					"description": "Free-form human-readable label for this attribute definition."
+					"description": "Free-form human-readable label for this global attribute."
 				},
 				"description": {
 					"$ref": "#/$defs/nonEmptyString",
-					"description": "Human-readable purpose of this attribute definition."
+					"description": "Human-readable purpose of this global attribute."
 				},
 				"authors": {
 					"$ref": "#/$defs/authors"
@@ -747,10 +752,10 @@
 					"minLength": 1
 				},
 				"kind": {
-					"$ref": "#/$defs/slotKind"
+					"$ref": "#/$defs/attributeKind"
 				},
 				"type": {
-					"description": "Value type: primitive name or class/attrdef FQN range.",
+					"description": "Value type: primitive name or class/global attribute FQN range.",
 					"oneOf": [
 						{
 							"$ref": "#/$defs/primitiveTypeName"
@@ -759,7 +764,7 @@
 							"$ref": "#/$defs/classFqnRange"
 						},
 						{
-							"$ref": "#/$defs/attrdefFqnRange"
+							"$ref": "#/$defs/globalAttrFqnRange"
 						}
 					]
 				},
@@ -847,8 +852,8 @@
 			}
 		},
 		{
-			"description": "A standalone attribute definition artefact (has 'fqn' and top-level 'kind').",
-			"$ref": "#/$defs/attrdefArtefact",
+			"description": "A standalone global attribute artefact (has 'fqn' and top-level 'kind').",
+			"$ref": "#/$defs/globalAttrArtefact",
 			"required": [
 				"ooml",
 				"fqn",
