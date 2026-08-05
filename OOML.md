@@ -31,7 +31,7 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 4. [Namespaces and Identity](#4-namespaces-and-identity)
 5. [Versioning](#5-versioning)
 6. [Primitive Types](#6-primitive-types)
-7. [Attribute Definitions](#7-attribute-definitions)
+7. [Global Attributes](#7-global-attributes)
 8. [Classes](#8-classes)
 9. [Attributes](#9-attributes)
 10. [Metadata](#10-metadata)
@@ -111,23 +111,23 @@ The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "S
 |------|------------|
 | **Resolution context** | The implementation-defined mechanism by which FQN ranges are resolved to specific artefact versions; outside the scope of this specification |
 | **Namespace** | A reverse-domain organisational scope that governs who may publish names within it |
-| **Class** | A versioned, named, uniquely identifiable collection of attribute slots; the primary unit of the OOML type system |
-| **Enum root** | A class whose subtypes (excluding itself) serve as the valid values of an `enum` slot; no dedicated artefact type |
-| **Attribute Definition** | A versioned, named, reusable semantic contract for a typed slot; a first-class artefact in the OOML identity model, independent of any class |
-| **Attribute Slot** | A named position within a class that either declares an inline type or references a standalone attribute definition |
-| **Superclass** | A class whose attribute slots and type identity are inherited by another class (its subclass) via `extends` |
-| **Subclass** | A class that names one or more classes in its `extends` property, thereby inheriting their attribute slots |
+| **Class** | A versioned, named, uniquely identifiable collection of attributes; the primary unit of the OOML type system |
+| **Enum root** | A class whose subtypes (excluding itself) serve as the valid values of an `enum` attribute; no dedicated artefact type |
+| **Global attribute** | A versioned, named, reusable semantic contract for a typed attribute; a first-class artefact in the OOML identity model, independent of any class |
+| **Attribute** | A named position within a class that either declares an inline type or references a standalone global attribute |
+| **Superclass** | A class whose attributes and type identity are inherited by another class (its subclass) via `extends` |
+| **Subclass** | A class that names one or more classes in its `extends` property, thereby inheriting their attributes |
 | **Supertype** | A class that has one or more descendant classes anywhere in the inheritance chain |
 | **Subtype** | A class that has one or more ancestor classes anywhere in the inheritance chain |
 | **Primitive** | A scalar value type built into the OOML type system (see §6) |
-| **Object slot** | An attribute slot whose value is a reference to an instance of a named class or any of its subtypes |
-| **Class slot** | An attribute slot whose value is a reference to a class — the named class itself or any of its subtypes |
-| **Enum slot** | An attribute slot whose value is a reference to a class that is a subtype of the named root class, excluding the named root class itself |
+| **`object` attribute** | An attribute whose value is a reference to an instance of a named class or any of its subtypes |
+| **`class` attribute** | An attribute whose value is a reference to a class — the named class itself or any of its subtypes |
+| **`enum` attribute** | An attribute whose value is a reference to a class that is a subtype of the named root class, excluding the named root class itself |
 | **Collection** | An ordered or unordered group of values sharing a declared element type: `list`, `set`, or `map` |
-| **Static slot** | An attribute slot whose value belongs to the class rather than to instances; subclasses may redeclare it unless `final` is also set |
+| **Static attribute** | An attribute whose value belongs to the class rather than to instances; subclasses may redeclare it unless `final` is also set |
 | **Alias** | A locally-scoped accessor name declared by a class, mapping a short name to the FQN of an inherited or imported attribute |
 | **MRO** | Method Resolution Order; the deterministic linearisation of a class's ancestor list used to compute its full attribute set |
-| **FQN** | Fully Qualified Name; the globally unique identity of a class or attribute definition (see §4) |
+| **FQN** | Fully Qualified Name; the globally unique identity of a class or global attribute (see §4) |
 | **`self`** | A reserved type reference used during authoring to refer to the declaring class itself; expanded to the class's FQN range before distribution |
 | **Name** | A free-form, human-readable label on an artefact, independent of the FQN and unconstrained by language |
 | **Dependency** | A versioned reference from one artefact to another that it structurally relies upon, derived from the referencing artefact's own body |
@@ -136,8 +136,8 @@ The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "S
 | **Metadata Schema** | An ordinary OOML class used as the schema for a metadata entry; carries no special marker |
 | **Metadata Entry** | A single key-value pair in the `metadata` object, keyed by a metadata schema FQN range |
 | **`cascade`** | A metadata entry control property: when `true`, the value propagates to subclasses that do not set their own value |
-| **`local`** | A control property on attribute slots and metadata entries: when `true`, the slot or entry is not inherited by subclasses |
-| **`final`** | A control property on attribute slots and metadata entries: when `true`, subclasses cannot override or shadow it |
+| **`local`** | A control property on attributes and metadata entries: when `true`, the attribute or entry is not inherited by subclasses |
+| **`final`** | A control property on attributes and metadata entries: when `true`, subclasses cannot override or shadow it |
 
 ---
 
@@ -159,15 +159,15 @@ Namespaces are organisationally controlled. The mechanism by which namespace own
 
 ### 4.2 Fully Qualified Name (FQN)
 
-Every class and attribute definition has an FQN that is globally unique:
+Every class and global attribute has an FQN that is globally unique:
 
 ```
 class-fqn      = namespace "/" class-name "@" version
-attrdef-fqn    = namespace "/" attrdef-name "@" version
-owned-attr-fqn = class-fqn "#" attr-slot-name
+global-attr-fqn    = namespace "/" global-attr-name "@" version
+owned-attr-fqn = class-fqn "#" attr-name
 ```
 
-`class-fqn` and `attrdef-fqn` are the identities of the two OOML artefact types. Enum roots are ordinary classes and use `class-fqn`. `owned-attr-fqn` identifies an attribute slot declared inline within a class. Attribute slots that reference a standalone attribute definition are identified by the attribute definition's own `attrdef-fqn`, not by a `class-fqn#name` path.
+`class-fqn` and `global-attr-fqn` are the identities of the two OOML artefact types. Enum roots are ordinary classes and use `class-fqn`. `owned-attr-fqn` identifies an attribute declared inline within a class. Attributes that reference a standalone global attribute are identified by the global attribute's own `global-attr-fqn`, not by a `class-fqn#name` path.
 
 Examples:
 
@@ -182,13 +182,13 @@ The namespace alone scopes all artefact names. There is no intermediate model or
 
 ### 4.3 The `self` Type Reference
 
-The literal string `"self"` is a reserved authoring token. It may appear in any position where a class FQN range is expected — in an attribute slot's `type`, `valueType`, or `keyType` — and means: *the class in which this slot is declared*.
+The literal string `"self"` is a reserved authoring token. It may appear in any position where a class FQN range is expected — in an attribute's `type`, `valueType`, or `keyType` — and means: *the class in which this attribute is declared*.
 
 `self` is an authoring convenience that solves the chicken-and-egg problem of a class needing to reference itself before its own version is known. It is valid only during authoring. Before an artefact is committed and distributed, tooling MUST expand every occurrence of `self` to the FQN range of the declaring class (rule T-self). The distributed form of an OOML artefact MUST NOT contain `self`.
 
-`self` resolves to the **declaring class** — the class in which the slot is written — not to the inheriting class. A subclass that inherits a slot whose `type` was declared as `self` inherits a slot typed to the superclass that declared it, not to itself.
+`self` resolves to the **declaring class** — the class in which the attribute is written — not to the inheriting class. A subclass that inherits an attribute whose `type` was declared as `self` inherits an attribute typed to the superclass that declared it, not to itself.
 
-`self` is valid on `class`, `object`, and `enum` slots, and in `valueType` and `keyType` positions on `list`, `set`, and `map` slots. It is not valid on `primitive` or `attribute` slots.
+`self` is valid on attributes of kind `class`, `object`, or `enum`, and in `valueType` and `keyType` positions on `list`, `set`, and `map` attributes. It is not valid on attributes of kind `primitive` or `attribute`.
 
 ```json
 "manager": {
@@ -216,10 +216,10 @@ When committed as `com.example.hr/Employee@1.3.0`, the above expands to:
 
 - A class name MUST be unique within a namespace (i.e. `com.example.hr/Employee` identifies a single evolving class, versioned over time).
 
-- An attribute definition name MUST be unique within a namespace.
-- Inline attribute slot names MUST be unique within the class that declares them.
-- Inline attribute slot names MUST NOT collide with any alias declared by the same class (rule A03).
-- The full accessible name surface of a class — its own slot names, its inherited slot names (by their canonical local names where unambiguous), and its aliases — MUST be collision-free after alias resolution (rule A04).
+- A global attribute name MUST be unique within a namespace.
+- Inline attribute identifiers MUST be unique within the class that declares them.
+- Inline attribute identifiers MUST NOT collide with any alias declared by the same class (rule A03).
+- The full accessible name surface of a class — its own attribute identifiers, its inherited attribute identifiers (by their canonical local names where unambiguous), and its aliases — MUST be collision-free after alias resolution (rule A04).
 
 ### 4.5 Name Conventions
 
@@ -227,8 +227,8 @@ When committed as `com.example.hr/Employee@1.3.0`, the above expands to:
 |----------|------------|---------|
 | Namespace segment | lowercase alphanumeric | `[a-z][a-z0-9]*` |
 | Class name | PascalCase | `[A-Z][A-Za-z0-9]*` |
-| Attribute definition name | PascalCase | `[A-Z][A-Za-z0-9]*` |
-| Attribute slot name | camelCase | `[a-z][a-zA-Z0-9]*` |
+| Global attribute name | PascalCase | `[A-Z][A-Za-z0-9]*` |
+| Attribute identifier | camelCase | `[a-z][a-zA-Z0-9]*` |
 | Alias name | camelCase | `[a-z][a-zA-Z0-9]*` |
 
 ---
@@ -237,7 +237,7 @@ When committed as `com.example.hr/Employee@1.3.0`, the above expands to:
 
 ### 5.1 Scope
 
-In OOML 0.1.0, versioning applies to **individual classes and attribute definitions**. There is no version at the namespace level or any grouping level.
+In OOML 0.1.0, versioning applies to **individual classes and global attributes**. There is no version at the namespace level or any grouping level.
 
 ### 5.2 Version Format
 
@@ -256,7 +256,7 @@ Pre-release and build metadata suffixes (`-alpha.1`, `+build.5`) MAY be appended
 
 | Component | Increment when | Effect on consumers |
 |-----------|---------------|---------------------|
-| `MAJOR` | A **breaking change** is introduced to the class or attribute definition | Consumers depending on a prior version MUST explicitly migrate. Existing instance data MAY no longer conform. |
+| `MAJOR` | A **breaking change** is introduced to the class or global attribute | Consumers depending on a prior version MUST explicitly migrate. Existing instance data MAY no longer conform. |
 | `MINOR` | A **non-breaking, data- or query-significant** addition is made | Existing valid data remains valid. New optional attributes, widened types, new enum subclasses. |
 | `TRIVIAL` | A **non-breaking, data- and query-insignificant** change is made | No structural change. Documentation, descriptions, author metadata, tags. |
 
@@ -265,44 +265,44 @@ Pre-release and build metadata suffixes (`-alpha.1`, `+build.5`) MAY be appended
 The following changes are breaking and MUST increment the MAJOR version:
 
 *Class changes:*
-- Removing an attribute slot
-- Renaming an attribute slot
-- Changing an attribute slot's `kind`
-- Narrowing an attribute slot's `type`
-- Changing an attribute slot from optional to required
-- Changing the `valueType` or `valueKind` of a `list`, `set`, or `map` attribute slot
-- Changing the `keyType` or `keyKind` of a `map` attribute slot
-- Changing an `object` or `class` attribute slot's `type` to an incompatible class (one that is not a subtype of the original)
+- Removing an attribute
+- Renaming an attribute
+- Changing an attribute's `kind`
+- Narrowing an attribute's `type`
+- Changing an attribute from optional to required
+- Changing the `valueType` or `valueKind` of a `list`, `set`, or `map` attribute
+- Changing the `keyType` or `keyKind` of a `map` attribute
+- Changing an `object` or `class` attribute's `type` to an incompatible class (one that is not a subtype of the original)
 - Removing a class from the `extends` array
-- Changing the `value` of a `static: true, final: true` attribute slot
+- Changing the `value` of a `static: true, final: true` attribute
 - Removing an alias
 - Changing an alias to point at a different FQN
-- Adding `local: true` to a previously non-local attribute slot
-- Adding `final: true` to a previously non-final attribute slot (locks it for the hierarchy)
+- Adding `local: true` to a previously non-local attribute
+- Adding `final: true` to a previously non-final attribute (locks it for the hierarchy)
 - Removing a `required: true` metadata slot declaration from the hierarchy
 - Changing a metadata entry from `cascade: true` to `cascade: false`
 - Changing a metadata entry value when `final: true`
 
 *Enum root changes:*
 - Removing a subclass that served as an enum value (removing a member of an enum)
-- Renaming a class or attribute definition (equivalent to removing the old and adding a new one)
+- Renaming a class or global attribute (equivalent to removing the old and adding a new one)
 
-*Attribute definition changes:*
-- Changing the `kind` or `type` of an attribute definition
-- Narrowing constraints of an attribute definition (e.g. reducing `maxLength`)
+*Global attribute changes:*
+- Changing the `kind` or `type` of a global attribute
+- Narrowing constraints of a global attribute (e.g. reducing `maxLength`)
 
 ### 5.5 Non-Breaking Additions (MINOR)
 
 The following changes require a MINOR increment:
 
 *Class changes:*
-- Adding a new optional attribute slot
+- Adding a new optional attribute
 - Adding a new class to the `extends` array
 - Adding a new alias
-- Widening an attribute slot's `type` (e.g. `int32` → `int64`)
-- Changing a required attribute slot to optional
+- Widening an attribute's `type` (e.g. `int32` → `int64`)
+- Changing a required attribute to optional
 
-- Changing a `class` attribute slot's `type` to a subtype of the original
+- Changing a `class` attribute's `type` to a subtype of the original
 - Adding a new metadata entry
 - Adding a new metadata slot declaration (`required: true`, `value: null`)
 - Changing `cascade: false` to `cascade: true` on a metadata entry
@@ -310,8 +310,8 @@ The following changes require a MINOR increment:
 *Enum root changes:*
 - Adding a new subclass of an enum root (adding a member of an enum)
 
-*Attribute definition changes:*
-- Widening constraints of an attribute definition (e.g. increasing `maxLength`)
+*Global attribute changes:*
+- Widening constraints of a global attribute (e.g. increasing `maxLength`)
 
 ### 5.6 Trivial Changes (TRIVIAL)
 
@@ -322,7 +322,7 @@ The following changes require a MINOR increment:
 
 ### 5.7 Initial Development
 
-A MAJOR version of `0` indicates the class or attribute definition is in initial development. Any change MAY be breaking. Consumers of `0.y.z` artefacts SHOULD treat every MINOR increment as potentially breaking.
+A MAJOR version of `0` indicates the class or global attribute is in initial development. Any change MAY be breaking. Consumers of `0.y.z` artefacts SHOULD treat every MINOR increment as potentially breaking.
 
 ### 5.8 Version Monotonicity
 
@@ -363,15 +363,15 @@ OOML defines the following built-in primitive types. Implementations MUST suppor
 ---
 
 
-## 7. Attribute Definitions
+## 7. Global Attributes
 
-Attribute definitions are first-class, independently versioned artefacts. An attribute definition describes a reusable, typed semantic contract for a named slot — independent of any class. Any class may reference an attribute definition in an attribute slot of `"kind": "attribute"`.
+Global attributes are first-class, independently versioned artefacts. A global attribute describes a reusable, typed semantic contract for a named attribute — independent of any class. Any class may reference a global attribute in an attribute of `"kind": "attribute"`.
 
-Attribute definitions are appropriate for domain concepts that are genuinely global: `UnitOfMeasure`, `MonetaryAmount`, `GeoCoordinate`, `IsoLanguageCode`. They are not appropriate for attributes that are intrinsic to a specific class and have no meaning outside it.
+Global attributes are appropriate for domain concepts that are genuinely global: `UnitOfMeasure`, `MonetaryAmount`, `GeoCoordinate`, `IsoLanguageCode`. They are not appropriate for attributes that are intrinsic to a specific class and have no meaning outside it.
 
-### 7.1 Attribute Definition Structure
+### 7.1 Global Attribute Structure
 
-An attribute definition is a JSON object published as a standalone artefact:
+A global attribute is a JSON object published as a standalone artefact:
 
 ```json
 {
@@ -389,37 +389,37 @@ An attribute definition is a JSON object published as a standalone artefact:
 
 ```
 
-### 7.2 Attribute Definition Properties
+### 7.2 Global Attribute Properties
 
 | Property | Type | Required | Description |
 |----------|------|----------|-------------|
 | `ooml` | string | REQUIRED | OOML specification version targeted. |
-| `fqn` | string | REQUIRED | Fully qualified name and version of this attribute definition (see §4.2). |
-| `name` | string | REQUIRED | Free-form human-readable label for this attribute definition. |
-| `description` | string | RECOMMENDED | Human-readable purpose of this attribute definition. |
+| `fqn` | string | REQUIRED | Fully qualified name and version of this global attribute (see §4.2). |
+| `name` | string | REQUIRED | Free-form human-readable label for this global attribute. |
+| `description` | string | RECOMMENDED | Human-readable purpose of this global attribute. |
 | `authors` | array of string | RECOMMENDED | Authors in `Name <email>` format. |
 | `license` | string | RECOMMENDED | SPDX licence expression. |
-| `kind` | string | REQUIRED | Structural role. One of: `primitive`, `object`, `class`, `enum`, `list`, `set`, `map`. Same vocabulary as class attribute slots (see §9). |
-| `type` | string | REQUIRED (where applicable) | Value type: primitive type name or class FQN range. Same rules as class attribute slots. |
+| `kind` | string | REQUIRED | Structural role. One of: `primitive`, `object`, `class`, `enum`, `list`, `set`, `map`. Same vocabulary as attributes declared within a class (see §9). |
+| `type` | string | REQUIRED (where applicable) | Value type: primitive type name or class FQN range. Same rules as attributes declared within a class. |
 | `deprecated` | string | OPTIONAL | If present, this artefact is deprecated; the value is the deprecation message. MUST be a non-empty string. Omit when not deprecated. |
 
-All additional type-specific properties that apply to a class attribute slot of the given `kind` (e.g. `minLength`, `pattern`, `precision`, `scale`, `valueKind`, `valueType`, `keyType`) also apply to attribute definitions.
+All additional type-specific properties that apply to an attribute of the given `kind` (e.g. `minLength`, `pattern`, `precision`, `scale`, `valueKind`, `valueType`, `keyType`) also apply to global attributes.
 
-### 7.3 FQN of an Attribute Definition
+### 7.3 FQN of a Global Attribute
 
-The FQN of an attribute definition follows the same pattern as a class FQN:
+The FQN of a global attribute follows the same pattern as a class FQN:
 
 ```
-attrdef-fqn = namespace "/" attrdef-name "@" version
+global-attr-fqn = namespace "/" global-attr-name "@" version
 ```
 
 Example: `com.example.physics/Temperature@1.0.0`
 
-The name uses PascalCase (same as class names) to signal that it is a named artefact in the identity model, not an instance-level slot name.
+The name uses PascalCase (same as class names) to signal that it is a named artefact in the identity model, not an instance-level attribute identifier.
 
-### 7.4 Referencing an Attribute Definition in a Class
+### 7.4 Referencing a Global Attribute in a Class
 
-A class attribute slot references a standalone attribute definition using `"kind": "attribute"` and a `type` holding the attribute definition's FQN range:
+An attribute references a standalone global attribute using `"kind": "attribute"` and a `type` holding the global attribute's FQN range:
 
 ```json
 "surfaceTemp": {
@@ -431,19 +431,19 @@ A class attribute slot references a standalone attribute definition using `"kind
 }
 ```
 
-The slot name (`surfaceTemp`) is the local name within the class. The attribute definition's identity is `com.example.physics/Temperature@^1.0.0`. The two are independent: the slot name is how instances are navigated; the attribute definition FQN is how the semantic contract is referenced and versioned.
+The attribute identifier (`surfaceTemp`) is the local name within the class. The global attribute's identity is `com.example.physics/Temperature@^1.0.0`. The two are independent: the attribute identifier is how instances are navigated; the global attribute FQN is how the semantic contract is referenced and versioned.
 
-### 7.5 Versioning of Attribute Definitions
+### 7.5 Versioning of Global Attributes
 
-Attribute definitions follow the same change-impact contract as classes (§6). Because changing a `type` fundamentally alters the semantic contract, it is a MAJOR change. The same logic applies here as discussed in §6.4: a type-changed attribute definition is effectively a new thing, and consumers pinned to the old version are unaffected.
+Global attributes follow the same change-impact contract as classes (§6). Because changing a `type` fundamentally alters the semantic contract, it is a MAJOR change. The same logic applies here as discussed in §6.4: a type-changed global attribute is effectively a new thing, and consumers pinned to the old version are unaffected.
 
-### 7.6 Attribute Definitions and the Dependency Graph
+### 7.6 Global Attributes and the Dependency Graph
 
-When a class references an attribute definition, this is read as an edge in the (derived) dependency graph from the class to the attribute definition. This edge is of type `attribute-import` and participates in cycle detection (an `object`-kind attribute definition that referenced the importing class would create a structural cycle and is rejected by rule D02).
+When a class references a global attribute, this is read as an edge in the (derived) dependency graph from the class to the global attribute. This edge is of type `attribute-import` and participates in cycle detection (an `object`-kind global attribute that referenced the importing class would create a structural cycle and is rejected by rule D02).
 
 Enum roots are ordinary classes. A dependency on an enum root appears as a standard class edge in the dependency graph, identical to any other class dependency.
 
-> **Note:** How attribute definitions are stored, resolved, and distributed is outside the scope of this specification.
+> **Note:** How global attributes are stored, resolved, and distributed is outside the scope of this specification.
 
 ---
 
@@ -486,7 +486,7 @@ A class is a JSON object published as a standalone artefact:
 | `deprecated` | string | OPTIONAL | — | If present, this class is deprecated; the value is the deprecation message. MUST be a non-empty string. Omit when not deprecated. |
 | `aliases` | object | OPTIONAL | `{}` | Map of alias name to attribute FQN range (see §12). |
 | `metadata` | object | OPTIONAL | `{}` | Map of metadata schema FQN range to metadata entry (see §10). |
-| `attributes` | object | OPTIONAL | `{}` | Map of attribute slot name to attribute slot definition (see §9). Omit when empty. |
+| `attributes` | object | OPTIONAL | `{}` | Map of attribute identifier to attribute (see §9). Omit when empty. |
 
 ### 8.3 The `fqn` Property
 
@@ -496,24 +496,24 @@ The `fqn` property is the class's own identity. It enables a class definition to
 
 ## 9. Attributes
 
-An attribute is a named, typed slot within a class. Every attribute has a `kind` that classifies its structural role and a `type` that specifies its value type.
+An attribute is a named, typed position within a class. Every attribute has a `kind` that classifies its structural role and a `type` that specifies its value type.
 
 ### 9.1 Common Properties
 
-#### The Slot Identifier
+#### The Attribute Identifier
 
-The JSON property name used as the key in a class's `attributes` object is the **slot identifier** — a camelCase string that addresses this slot within the class's own attribute namespace. It has three distinct roles and must not be confused with related concepts:
+The JSON property name used as the key in a class's `attributes` object is the **attribute identifier** — a camelCase string that addresses this attribute within the class's own attribute namespace. It has three distinct roles and must not be confused with related concepts:
 
 | Concept | Example | Description |
 |---------|---------|-------------|
-| **Slot identifier** | `employeeNumber` | The JSON key in the `attributes` object. Follows `[a-z][a-zA-Z0-9]*`. Locally scoped to the class. Used by tooling, code generation, and instance navigation. |
+| **Attribute identifier** | `employeeNumber` | The JSON key in the `attributes` object. Follows `[a-z][a-zA-Z0-9]*`. Locally scoped to the class. Used by tooling, code generation, and instance navigation. |
 | **`name` property** | `"Employee Number"` | The free-form human-readable label. Unconstrained. Used in UIs and documentation. |
-| **Owned slot FQN** | `com.example.hr/Employee@1.2.0#employeeNumber` | The globally unique identity of this slot. Composed of the class FQN and the slot identifier. |
-| **Referenced attribute definition FQN** | `com.example.finance/Salary@1.0.0` | When `"kind": "attribute"`, the FQN of the standalone definition being referenced. Independent of the slot identifier. |
+| **Owned attribute FQN** | `com.example.hr/Employee@1.2.0#employeeNumber` | The globally unique identity of this attribute. Composed of the class FQN and the attribute identifier. |
+| **Referenced global attribute FQN** | `com.example.finance/Salary@1.0.0` | When `"kind": "attribute"`, the FQN of the standalone global attribute being referenced. Independent of the attribute identifier. |
 
-The slot identifier and the `name` often convey the same concept in different forms (`employeeNumber` / `"Employee Number"`), but they are independent: the slot identifier is a syntactic key, the `name` is a human label.
+The attribute identifier and the `name` often convey the same concept in different forms (`employeeNumber` / `"Employee Number"`), but they are independent: the attribute identifier is a syntactic key, the `name` is a human label.
 
-Every attribute slot, regardless of `kind`, shares the following properties:
+Every attribute, regardless of `kind`, shares the following properties:
 
 ```json
 "attributeName": {
@@ -526,17 +526,17 @@ Every attribute slot, regardless of `kind`, shares the following properties:
 
 | Property | Type | Required | Default | Description |
 |----------|------|----------|---------|-------------|
-| `kind` | string | REQUIRED | — | Structural role of this attribute slot. One of: `primitive`, `object`, `class`, `enum`, `list`, `set`, `map`, `attribute`. |
-| `type` | string | REQUIRED (see §9.2) | — | Value type. A primitive type name (§6), a class FQN range, an attribute definition FQN range, or `"self"` (see §4.3), depending on `kind`. Not present on `list`, `set`, and `map` — those use `valueKind` and `valueType` instead. |
-| `name` | string | REQUIRED | — | Free-form human-readable label for this attribute slot. Independent of the slot's JSON property name. |
-| `description` | string | RECOMMENDED | — | Human-readable purpose of this attribute slot. |
-| `required` | boolean | OPTIONAL | `false` | Whether instances of this class MUST carry a value for this slot. Applies only to non-static slots (see rule S11). |
-| `nullable` | boolean | OPTIONAL | `false` | Whether the instance-level value MAY be JSON `null` when present. Applies only to non-static slots (see rule S12). |
-| `static` | boolean | OPTIONAL | `false` | If `true`, the value belongs to the class, not to instances. Instances cannot set or override it. The `value` property MAY be provided; if absent the value is `undefined`. Subclasses may redeclare the slot with a different value unless `final: true` is also set. MUST NOT be combined with `required: true` (rule S11) or `nullable: true` (rule S12). |
-| `value` | any | OPTIONAL | — | The class-level value for a `static` slot. MUST be consistent with `type`. When absent on a `static` slot, the value is `undefined`. MUST NOT appear on non-static slots. |
-| `local` | boolean | OPTIONAL | `false` | If `true`, this slot is scoped to the declaring class and is not inherited by subclasses. Remains fully visible and accessible to consumers of the declaring class. |
-| `final` | boolean | OPTIONAL | `false` | If `true`, subclasses cannot shadow, alias, or further constrain this slot. Combined with `static: true`, locks the class-level value for the entire hierarchy. |
-| `deprecated` | string | OPTIONAL | — | If present, this slot is deprecated; the value is the deprecation message. MUST be a non-empty string. Omit when not deprecated. |
+| `kind` | string | REQUIRED | — | Structural role of this attribute. One of: `primitive`, `object`, `class`, `enum`, `list`, `set`, `map`, `attribute`. |
+| `type` | string | REQUIRED (see §9.2) | — | Value type. A primitive type name (§6), a class FQN range, a global attribute FQN range, or `"self"` (see §4.3), depending on `kind`. Not present on `list`, `set`, and `map` — those use `valueKind` and `valueType` instead. |
+| `name` | string | REQUIRED | — | Free-form human-readable label for this attribute. Independent of the attribute identifier used as its JSON property name. |
+| `description` | string | RECOMMENDED | — | Human-readable purpose of this attribute. |
+| `required` | boolean | OPTIONAL | `false` | Whether instances of this class MUST carry a value for this attribute. Applies only to non-static attributes (see rule S11). |
+| `nullable` | boolean | OPTIONAL | `false` | Whether the instance-level value MAY be JSON `null` when present. Applies only to non-static attributes (see rule S12). |
+| `static` | boolean | OPTIONAL | `false` | If `true`, the value belongs to the class, not to instances. Instances cannot set or override it. The `value` property MAY be provided; if absent the value is `undefined`. Subclasses may redeclare the attribute with a different value unless `final: true` is also set. MUST NOT be combined with `required: true` (rule S11) or `nullable: true` (rule S12). |
+| `value` | any | OPTIONAL | — | The class-level value for a `static` attribute. MUST be consistent with `type`. When absent on a `static` attribute, the value is `undefined`. MUST NOT appear on non-static attributes. |
+| `local` | boolean | OPTIONAL | `false` | If `true`, this attribute is scoped to the declaring class and is not inherited by subclasses. Remains fully visible and accessible to consumers of the declaring class. |
+| `final` | boolean | OPTIONAL | `false` | If `true`, subclasses cannot shadow, alias, or further constrain this attribute. Combined with `static: true`, locks the class-level value for the entire hierarchy. |
+| `deprecated` | string | OPTIONAL | — | If present, this attribute is deprecated; the value is the deprecation message. MUST be a non-empty string. Omit when not deprecated. |
 
 **`static` examples:**
 
@@ -646,7 +646,7 @@ A pointer to an instance of a named class, identified by that instance's identit
 
 ### 9.5 Kind: `enum`
 
-An `enum` slot holds a **reference to a class** that is a subtype of the named root class, excluding the named root class itself. This is the enumerative pattern: the root class defines the category; its subtypes define the members. Neither the root nor its subtypes are required to be abstract or concrete — that is the modeller's choice.
+An `enum` attribute holds a **reference to a class** that is a subtype of the named root class, excluding the named root class itself. This is the enumerative pattern: the root class defines the category; its subtypes define the members. Neither the root nor its subtypes are required to be abstract or concrete — that is the modeller's choice.
 
 ```json
 "employmentType": {
@@ -687,8 +687,8 @@ An ordered sequence of values of a declared value type. Duplicate values are per
 
 | Property | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `valueKind` | REQUIRED | — | Kind of each value. Same vocabulary as attribute slot kinds. |
-| `valueType` | REQUIRED (where applicable) | — | Type of each value. A primitive type name, class FQN range, attribute definition FQN range, or `"self"`, consistent with `valueKind`. For `valueKind: "enum"`, valid values are subtypes of the named class, excluding the named class itself. |
+| `valueKind` | REQUIRED | — | Kind of each value. Same vocabulary as attribute kinds. |
+| `valueType` | REQUIRED (where applicable) | — | Type of each value. A primitive type name, class FQN range, global attribute FQN range, or `"self"`, consistent with `valueKind`. For `valueKind: "enum"`, valid values are subtypes of the named class, excluding the named class itself. |
 | `minItems` | OPTIONAL | — | Minimum number of values (inclusive). |
 | `maxItems` | OPTIONAL | — | Maximum number of values (inclusive). |
 
@@ -712,7 +712,7 @@ Properties are identical to `list` (§9.6).
 
 ### 9.8 Kind: `map`
 
-A collection of key-value pairs. Keys MUST be unique within an instance. Both keys and values may be of any attribute slot kind.
+A collection of key-value pairs. Keys MUST be unique within an instance. Both keys and values may be of any attribute kind.
 
 ```json
 "localizedTitles": {
@@ -738,10 +738,10 @@ When `keyKind` and `keyType` are omitted the map has `primitive`/`string` keys �
 
 | Property | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `keyKind` | OPTIONAL | `primitive` | Kind of each map key. Same vocabulary as attribute slot kinds. |
-| `keyType` | OPTIONAL | `string` | Type of each map key. A primitive type name, class FQN range, or attribute definition FQN range, consistent with `keyKind`. |
-| `valueKind` | REQUIRED | — | Kind of each map value. Same vocabulary as attribute slot kinds. |
-| `valueType` | REQUIRED (where applicable) | — | Type of each map value. A primitive type name, class FQN range, attribute definition FQN range, or `"self"`, consistent with `valueKind`. For `valueKind: "enum"`, valid values are subtypes of the named class, excluding the named class itself. |
+| `keyKind` | OPTIONAL | `primitive` | Kind of each map key. Same vocabulary as attribute kinds. |
+| `keyType` | OPTIONAL | `string` | Type of each map key. A primitive type name, class FQN range, or global attribute FQN range, consistent with `keyKind`. |
+| `valueKind` | REQUIRED | — | Kind of each map value. Same vocabulary as attribute kinds. |
+| `valueType` | REQUIRED (where applicable) | — | Type of each map value. A primitive type name, class FQN range, global attribute FQN range, or `"self"`, consistent with `valueKind`. For `valueKind: "enum"`, valid values are subtypes of the named class, excluding the named class itself. |
 | `minItems` | OPTIONAL | — | Minimum number of entries (inclusive). |
 | `maxItems` | OPTIONAL | — | Maximum number of entries (inclusive). |
 
@@ -749,7 +749,7 @@ When `keyKind` and `keyType` are omitted the map has `primitive`/`string` keys �
 
 ### 9.9 Kind: `attribute`
 
-An attribute slot that references a standalone attribute definition (see §9). The slot inherits the `kind`, `type`, and all type-specific constraints from the attribute definition. The slot name within the class is the local accessor name for that attribute.
+An attribute that references a standalone global attribute (see §9). The attribute inherits the `kind`, `type`, and all type-specific constraints from the global attribute. The attribute identifier within the class is the local accessor name for that attribute.
 
 ```json
 "surfaceTemp": {
@@ -763,9 +763,9 @@ An attribute slot that references a standalone attribute definition (see §9). T
 
 | Property | Required | Description |
 |----------|----------|-------------|
-| `type` | REQUIRED | FQN range of the attribute definition. |
+| `type` | REQUIRED | FQN range of the global attribute. |
 
-All common properties (`name`, `required`, `nullable`, `static`, `local`, `final`, `deprecated`) apply to `attribute` slots. The structural properties of the value (`kind`, `type`, and type-specific constraints) are inherited from the referenced attribute definition and MUST NOT be redeclared on the slot. The `description` on the slot is the context-specific description within this class; the attribute definition's own `description` is the canonical domain description.
+All common properties (`name`, `required`, `nullable`, `static`, `local`, `final`, `deprecated`) apply to attributes of kind `attribute`. The structural properties of the value (`kind`, `type`, and type-specific constraints) are inherited from the referenced global attribute and MUST NOT be redeclared on the attribute. The `description` on the attribute is the context-specific description within this class; the global attribute's own `description` is the canonical domain description.
 
 ---
 
@@ -774,13 +774,13 @@ All common properties (`name`, `required`, `nullable`, `static`, `local`, `final
 
 ### 10.1 Purpose
 
-Metadata in OOML is a mechanism for attaching structured, typed, versioned annotations to any artefact — a class or an attribute definition. Rather than defining a separate metadata modelling language, OOML uses itself: metadata schemas are ordinary OOML classes, independently versioned, and referenced by FQN range. This means metadata schemas automatically inherit all OOML capabilities: inheritance, attribute slots, type safety, and dependency tracking.
+Metadata in OOML is a mechanism for attaching structured, typed, versioned annotations to any artefact — a class or a global attribute. Rather than defining a separate metadata modelling language, OOML uses itself: metadata schemas are ordinary OOML classes, independently versioned, and referenced by FQN range. This means metadata schemas automatically inherit all OOML capabilities: inheritance, attributes, type safety, and dependency tracking.
 
 A metadata schema carries no special marker. Any class may serve as a metadata schema. Whether a class is intended for metadata use is a convention recorded in its `description` and `tags`, not a language-level distinction.
 
 ### 10.2 The `metadata` Property
 
-The `metadata` property on a class or attribute definition is a JSON object. Each key is the FQN range of a metadata schema class. Each value is either a **short-form** scalar value or a **compound-form** object with control properties.
+The `metadata` property on a class or global attribute is a JSON object. Each key is the FQN range of a metadata schema class. Each value is either a **short-form** scalar value or a **compound-form** object with control properties.
 
 ```json
 {
@@ -809,7 +809,7 @@ The `metadata` property on a class or attribute definition is a JSON object. Eac
 }
 ```
 
-The value of each metadata schema entry is itself an object whose keys are attribute slot names defined on the metadata schema class, and whose values are either short-form or compound-form.
+The value of each metadata schema entry is itself an object whose keys are attribute identifiers defined on the metadata schema class, and whose values are either short-form or compound-form.
 
 ### 10.3 Short Form vs Compound Form
 
@@ -837,7 +837,7 @@ A validator normalises short form to compound form internally. The two are seman
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
-| `value` | any | — | REQUIRED in compound form. The metadata value. MUST conform to the type declared in the metadata schema class for this attribute slot. MAY be `null` when `required: false`. |
+| `value` | any | — | REQUIRED in compound form. The metadata value. MUST conform to the type declared in the metadata schema class for this attribute. MAY be `null` when `required: false`. |
 | `required` | boolean | `true` | Whether a concrete value MUST be present. If `true` and `value` is `null`, this entry is a **slot declaration**: it signals that a value must be set somewhere in the inheritance chain before the artefact (or any subclass) is considered valid. |
 | `cascade` | boolean | `false` | If `true`, the value propagates to subclasses that do not set their own value for this entry. Subclasses may always override a cascaded value unless `final: true`. |
 | `local` | boolean | `false` | If `true`, this entry is scoped to the declaring artefact and is not inherited by subclasses. The entry remains fully visible and accessible to consumers of the declaring artefact. |
@@ -882,21 +882,21 @@ Metadata entries are inherited by subclasses subject to the following rules:
 5. A `local: true` entry is not inherited. It exists only on the declaring artefact.
 6. A subclass MUST NOT remove a required slot declaration inherited from an ancestor. It satisfies it by providing a non-null value.
 
-### 10.8 `local` and `final` on Attribute Slots
+### 10.8 `local` and `final` on Attributes
 
-The `local` and `final` modifiers apply to attribute slots with the same semantics as metadata entries:
+The `local` and `final` modifiers apply to attributes with the same semantics as metadata entries:
 
-**`local: true` on an attribute slot** means the slot is declared on this class and is fully accessible to consumers of this class, but subclasses do not inherit it. It does not appear in a subclass's MRO-resolved attribute set. A subclass may declare its own slot with the same name without it being considered a redeclaration conflict.
+**`local: true` on an attribute** means the attribute is declared on this class and is fully accessible to consumers of this class, but subclasses do not inherit it. It does not appear in a subclass's MRO-resolved attribute set. A subclass may declare its own attribute with the same name without it being considered a redeclaration conflict.
 
-**`final: true` on an attribute slot** means no subclass may shadow, alias, or further constrain the slot. Attempting to declare a slot with the same canonical local name in a subclass is a validation error (rule I06). Attempting to alias a `final` slot to a different name in a subclass is permitted — aliasing is a navigation convenience, not a structural modification.
+**`final: true` on an attribute** means no subclass may shadow, alias, or further constrain the attribute. Attempting to declare an attribute with the same canonical local name in a subclass is a validation error (rule I06). Attempting to alias a `final` attribute to a different name in a subclass is permitted — aliasing is a navigation convenience, not a structural modification.
 
-Interaction rules for attribute slots:
+Interaction rules for attributes:
 
 | Combination | Result |
 |-------------|--------|
 | `local: true` + `final: true` | Permitted but redundant. Tooling SHOULD warn. |
-| `local: true` + `static: true` | Valid. The static value is scoped to this class only; subclasses do not inherit the slot. |
-| `final: true` + `static: true` | Valid. The class-level value is locked; subclasses cannot redeclare the slot. |
+| `local: true` + `static: true` | Valid. The static value is scoped to this class only; subclasses do not inherit the attribute. |
+| `final: true` + `static: true` | Valid. The class-level value is locked; subclasses cannot redeclare the attribute. |
 | `final: true` + `static: true` + `value` | The closest OOML equivalent to a traditional constant. |
 
 ### 10.9 Metadata and the Dependency Graph
@@ -935,19 +935,19 @@ Here `com.example.hr/Person` and `com.example.common/Auditable` are both **super
 
 ### 11.2 Attribute Inheritance Rules
 
-1. A subclass inherits all attribute slots from all its superclasses that are not marked `local: true`, and transitively from all ancestors.
-2. Inherited attribute slots MUST NOT be re-declared in a subclass, unless the inherited slot is `local: true` in the ancestor (in which case the subclass is free to declare its own slot with the same name).
-3. A subclass MUST NOT override an inherited attribute slot's `kind`, `type`, or constraints.
-4. A subclass MUST NOT shadow or re-declare a slot inherited from any ancestor that is marked `final: true` (rule I06).
-5. Inherited attribute slots from different ancestors whose **attribute definition FQNs differ** are always distinct, regardless of whether their local slot names happen to match. There is no conflict between them at the type level.
-6. Inherited attribute slots from different ancestors that share the **same attribute definition FQN** are the same attribute and appear once in the resolved attribute set. This is the only true diamond case and requires no resolution rule beyond deduplication.
+1. A subclass inherits all attributes from all its superclasses that are not marked `local: true`, and transitively from all ancestors.
+2. Inherited attributes MUST NOT be re-declared in a subclass, unless the inherited attribute is `local: true` in the ancestor (in which case the subclass is free to declare its own attribute with the same name).
+3. A subclass MUST NOT override an inherited attribute's `kind`, `type`, or constraints.
+4. A subclass MUST NOT shadow or re-declare an attribute inherited from any ancestor that is marked `final: true` (rule I06).
+5. Inherited attributes from different ancestors whose **global attribute FQNs differ** are always distinct, regardless of whether their local attribute identifiers happen to match. There is no conflict between them at the type level.
+6. Inherited attributes from different ancestors that share the **same global attribute FQN** are the same attribute and appear once in the resolved attribute set. This is the only true diamond case and requires no resolution rule beyond deduplication.
 
 ### 11.3 Attribute Resolution Order (MRO)
 
 The full attribute set of a class is computed by a depth-first, left-to-right traversal of the `extends` array (the class's own attributes come last). This is consistent with the C3 linearisation algorithm.
 
 For a class `C` with `"extends": [A, B]`:
-1. Resolve `C`'s own attribute slots.
+1. Resolve `C`'s own attributes.
 2. Prepend the linearisation of `A` (recursively).
 3. Prepend the linearisation of `B` (recursively), deduplicating any ancestors already included from step 2.
 4. The resulting ordered list is the MRO of `C`.
@@ -956,18 +956,18 @@ The MRO determines the order in which attributes appear in tooling output (e.g. 
 
 ### 11.4 Local Name Access and Collisions
 
-An inherited attribute slot is accessible by its **canonical local name** (the slot name as declared in the ancestor class) if and only if that name is unambiguous — i.e. no other inherited attribute slot in the same class shares the same local name (regardless of FQN).
+An inherited attribute is accessible by its **canonical local name** (the attribute identifier as declared in the ancestor class) if and only if that name is unambiguous — i.e. no other inherited attribute in the same class shares the same local name (regardless of FQN).
 
-If two inherited slots share a local name, neither is accessible by that name without an explicit alias (see §13). Tooling SHOULD warn when a local name collision is left unaliased.
+If two inherited attributes share a local name, neither is accessible by that name without an explicit alias (see §13). Tooling SHOULD warn when a local name collision is left unaliased.
 
 ### 11.5 Abstract Classes
 
 An abstract class (`"abstract": true`):
 
 - MUST NOT be instantiated directly.
-- MAY define attribute slots.
+- MAY define attributes.
 - MAY itself extend other classes.
-- MAY be the target of `class` and `object` attribute slots; the resolved instance at runtime will be a concrete subtype.
+- MAY be the target of `class` and `object` attributes; the resolved instance at runtime will be a concrete subtype.
 
 ### 11.6 Final Classes
 
@@ -989,11 +989,11 @@ This is the principal mechanism by which OOML propagates inheritance changes wit
 
 ### 12.1 Purpose
 
-An alias is a locally-scoped accessor name that a class declares for an attribute reachable on its instances — whether that attribute was inherited from a superclass or imported via an `"attribute"` slot. Aliases exist to:
+An alias is a locally-scoped accessor name that a class declares for an attribute reachable on its instances — whether that attribute was inherited from a superclass or imported via an attribute of `"kind": "attribute"`. Aliases exist to:
 
-1. **Disambiguate local name collisions.** When two inherited attributes share a local slot name (but have different FQNs), neither is accessible by that name without an alias.
+1. **Disambiguate local name collisions.** When two inherited attributes share a local attribute identifier (but have different FQNs), neither is accessible by that name without an alias.
 2. **Provide ergonomic names.** When a canonical attribute name is verbose or contextually awkward, an alias gives the class author control over the local interface.
-3. **Expose imported attribute definitions under class-appropriate names.** A standalone attribute definition has a PascalCase name in the identity model (e.g. `Temperature`); an alias gives it a camelCase slot-style name in context (e.g. `surfaceTemperature`).
+3. **Expose imported global attributes under class-appropriate names.** A standalone global attribute has a PascalCase name in the identity model (e.g. `Temperature`); an alias gives it a camelCase attribute-style name in context (e.g. `surfaceTemperature`).
 
 ### 12.2 Alias Declaration
 
@@ -1016,11 +1016,11 @@ Aliases are declared in the `aliases` property of a class definition, as a JSON 
 }
 ```
 
-Here `surfaceTemperature` and `coreTemperature` are aliases for two different attribute definitions that both happen to be locally named `temperature` in their respective superclasses. With these aliases declared, instances of `CelestialBody` expose `surfaceTemperature` and `coreTemperature` as distinct, unambiguous accessors.
+Here `surfaceTemperature` and `coreTemperature` are aliases for two different global attributes that both happen to be locally named `temperature` in their respective superclasses. With these aliases declared, instances of `CelestialBody` expose `surfaceTemperature` and `coreTemperature` as distinct, unambiguous accessors.
 
 ### 12.3 Alias Resolution
 
-An alias name resolves to the attribute whose FQN matches the declared FQN range, within the class's full resolved attribute set (own slots + all inherited slots). If the FQN range does not match any attribute in the resolved set, it is a validation error (rule A01).
+An alias name resolves to the attribute whose FQN matches the declared FQN range, within the class's full resolved attribute set (own attributes + all inherited attributes). If the FQN range does not match any attribute in the resolved set, it is a validation error (rule A01).
 
 ### 12.4 Alias Inheritance
 
@@ -1036,13 +1036,13 @@ A subclass MUST NOT declare an alias name that is already used by any ancestor f
 |------|-------------|
 | A01 | The FQN range in an alias declaration MUST match at least one attribute in the class's resolved attribute set. |
 | A02 | A given attribute FQN MUST NOT be the target of more than one alias within the same class declaration. (Subclasses may introduce additional aliases for the same FQN; the restriction is per-class, not per-hierarchy.) |
-| A03 | An alias name MUST NOT collide with any own attribute slot name declared in the same class. |
+| A03 | An alias name MUST NOT collide with any own attribute identifier declared in the same class. |
 | A04 | An alias name MUST NOT collide with the unambiguous canonical local name of any other attribute in the class's resolved set. |
 | A05 | A subclass MUST NOT declare an alias name already used by any ancestor for a different attribute FQN. |
 
 ### 12.6 Aliases and the `attr-fqn`
 
-Aliases are purely a navigation convenience. They do not change an attribute's FQN, appear in the dependency graph, or affect how attribute slots are stored or referenced outside the class's local interface. An alias is not an identity; it is a lens.
+Aliases are purely a navigation convenience. They do not change an attribute's FQN, appear in the dependency graph, or affect how attributes are stored or referenced outside the class's local interface. An alias is not an identity; it is a lens.
 
 ---
 
@@ -1089,8 +1089,12 @@ The `dependents` operation is the direct answer to the query that motivated this
 
 The OOML dependency graph is a directed acyclic graph (DAG) where:
 
-- **Nodes** are class and attribute definition versions, identified by their exact FQN (including version).
+- **Nodes** are class and global attribute versions, identified by their exact FQN (including version).
 - **Edges** are directed from a dependent to its dependency, labelled with the version range found at the point of reference.
+
+There is no separate `dependencies` property. The dependency graph is **derived**, not declared: every edge is read directly from the referencing properties already present in a class definition — `extends`, attribute `type` properties, collection `valueType`/`keyType` properties, `aliases` values, and `metadata` keys. A class definition is fully self-describing; nothing beyond its own body is needed to compute its dependency edges.
+
+There are no package nodes. Every node is an individual versioned class or global attribute. The dependency graph is a logical structure implied by the language; how it is computed, cached, or traversed by any particular tool is outside the scope of this specification.
 
 ### 14.2 Edge Types
 
@@ -1099,10 +1103,10 @@ Edges arise from the following sources:
 | Source | Edge meaning |
 |--------|-------------|
 | `extends` property (each entry) | Inheritance dependency: the subclass structurally incorporates the superclass |
-| `object` slot `type` property | Composition dependency: the class embeds instances of another class by value |
-| `class` slot `type` property | Reference dependency: the class refers to instances of another class by identity |
-| `enum` slot `type` property | Enum root dependency: the class references a class as an enum root |
-| `attribute` slot `type` property | Attribute import dependency: the class uses a standalone attribute definition |
+| `object` attribute `type` property | Composition dependency: the class embeds instances of another class by value |
+| `class` attribute `type` property | Reference dependency: the class refers to instances of another class by identity |
+| `enum` attribute `type` property | Enum root dependency: the class references a class as an enum root |
+| `attribute`-kind attribute `type` property | Attribute import dependency: the class uses a standalone global attribute |
 | `list`, `set`, or `map` `valueType`/`keyType` property | Collection element dependency |
 | `aliases` value (each entry) | Alias dependency: the class declares a local name for an inherited or imported attribute |
 | `metadata` object key (each entry) | Metadata schema dependency: the class carries metadata conforming to a metadata schema class |
@@ -1113,7 +1117,7 @@ Tools MAY distinguish edge types in visualisations and impact analysis.
 
 ### 14.3 Version Range Syntax
 
-OOML adopts the npm-compatible semver version range syntax for expressing version constraints wherever an FQN range appears (`extends`, attribute slot `type`/`valueType`/`keyType`, `aliases` values, `metadata` keys):
+OOML adopts the npm-compatible semver version range syntax for expressing version constraints wherever an FQN range appears (`extends`, attribute `type`/`valueType`/`keyType`, `aliases` values, `metadata` keys):
 
 | Specifier | Meaning |
 |-----------|---------|
@@ -1127,7 +1131,7 @@ For MAJOR version 0, `^0.y.z` is treated as `~0.y.z`, reflecting the initial-dev
 
 ### 14.4 Acyclicity
 
-The dependency graph MUST be acyclic across `extends`, `object`, `attribute-import`, and `metadata` edges. Self-referential `class` and `enum` slot edges — including those declared via `"self"` — are exempt: they are class-hierarchy references, not structural embedding, and do not constitute a definition cycle (see §19.6 for the underlying rationale).
+The dependency graph MUST be acyclic across `extends`, `object`, `attribute-import`, and `metadata` edges. Self-referential `class` and `enum` attribute edges — including those declared via `"self"` — are exempt: they are class-hierarchy references, not structural embedding, and do not constitute a definition cycle (see §19.6 for the underlying rationale).
 
 ### 14.5 Resolution
 
@@ -1152,7 +1156,7 @@ Because the dependency graph is a flat graph of class nodes with no package-leve
 
 ## 15. Serialisation Format
 
-OOML artefacts (classes and attribute definitions) are serialised as UTF-8 encoded JSON.
+OOML artefacts (classes and global attributes) are serialised as UTF-8 encoded JSON.
 
 ### 15.1 Omission-Over-Default Convention
 
@@ -1193,7 +1197,7 @@ These are informative conventions. Parsers MUST accept any valid JSON.
 
 ## 16. Validation Rules
 
-An OOML artefact (class or attribute definition) is **valid** if and only if all applicable rules below pass. Conformant tools MUST enforce these rules when processing artefacts and SHOULD enforce them during authoring.
+An OOML artefact (class or global attribute) is **valid** if and only if all applicable rules below pass. Conformant tools MUST enforce these rules when processing artefacts and SHOULD enforce them during authoring.
 
 ### 16.1 Structural Rules
 
@@ -1201,31 +1205,31 @@ An OOML artefact (class or attribute definition) is **valid** if and only if all
 |---------|-------------|
 | S01 | The `ooml` property MUST be a valid semver string identifying a known specification version. |
 | S02 | The namespace portion of `fqn` MUST match `[a-z][a-z0-9]*(\.[a-z][a-z0-9]*)+`. |
-| S03 | The class or attribute definition name portion of `fqn` MUST match `[A-Z][A-Za-z0-9]*`. |
-| S03a | The `name` property MUST be present and non-empty on all artefacts (classes and attribute definitions). |
+| S03 | The class or global attribute name portion of `fqn` MUST match `[A-Z][A-Za-z0-9]*`. |
+| S03a | The `name` property MUST be present and non-empty on all artefacts (classes and global attributes). |
 | S04 | The version portion of `fqn` MUST be a valid, exact (non-range) semver string. |
-| S05 | Attribute slot names MUST match `[a-z][a-zA-Z0-9]*` (camelCase). |
+| S05 | Attribute identifiers MUST match `[a-z][a-zA-Z0-9]*` (camelCase). |
 | S06 | Alias names MUST match `[a-z][a-zA-Z0-9]*` (camelCase). |
 
 | S08 | A class MUST NOT be both `abstract: true` and `final: true`. |
-| S09 | The `value` property MUST NOT appear on non-`static` attribute slots. |
-| S-deprecated | The `deprecated` property, when present on any artefact or attribute slot, MUST be a non-empty string. The value `null` is not permitted; omit the property instead. |
-| S10 | A `static` attribute slot's `value`, when provided, MUST be consistent with the slot's declared `type`. |
-| S11 | A `static` attribute slot MUST NOT have `required: true`. (Since the default is `false`, omitting `required` on a static slot is always correct.) |
-| S12 | A `static` attribute slot MUST NOT have `nullable: true`. |
+| S09 | The `value` property MUST NOT appear on non-`static` attributes. |
+| S-deprecated | The `deprecated` property, when present on any artefact or attribute, MUST be a non-empty string. The value `null` is not permitted; omit the property instead. |
+| S10 | A `static` attribute's `value`, when provided, MUST be consistent with the attribute's declared `type`. |
+| S11 | A `static` attribute MUST NOT have `required: true`. (Since the default is `false`, omitting `required` on a static attribute is always correct.) |
+| S12 | A `static` attribute MUST NOT have `nullable: true`. |
 
 ### 16.2 Type Rules
 
 | Rule ID | Description |
 |---------|-------------|
-| T01 | The `type` on a `primitive` slot MUST be one of the primitive type names in §7. |
-| T02 | The `type` on an `object`, `class`, or `enum` slot MUST resolve to a known class within the resolution context. |
-| T03 | The `type` on an `enum` slot defines the enum root. Valid values at runtime are references to classes that are subtypes of the named class, excluding the named class itself. |
-| T04 | The `type` on an `attribute` slot MUST resolve to a known attribute definition within the resolution context. |
+| T01 | The `type` on an attribute of kind `primitive` MUST be one of the primitive type names in §7. |
+| T02 | The `type` on an attribute of kind `object`, `class`, or `enum` MUST resolve to a known class within the resolution context. |
+| T03 | The `type` on an attribute of kind `enum` defines the enum root. Valid values at runtime are references to classes that are subtypes of the named class, excluding the named class itself. |
+| T04 | The `type` on an attribute of kind `attribute` MUST resolve to a known global attribute within the resolution context. |
 
 | T06 | When `valueKind` is `primitive`, `valueType` MUST be a valid primitive type name (§6). |
-| T07 | When `valueKind` is `object`, `class`, or `enum`, `valueType` MUST resolve to a known class. When `valueKind` is `attribute`, `valueType` MUST resolve to a known attribute definition. For `valueKind: "enum"`, valid values are subtypes of the resolved class, excluding the resolved class itself. |
-| T08 | The `keyType` on a `map` slot MUST be a primitive type name from §7. |
+| T07 | When `valueKind` is `object`, `class`, or `enum`, `valueType` MUST resolve to a known class. When `valueKind` is `attribute`, `valueType` MUST resolve to a known global attribute. For `valueKind: "enum"`, valid values are subtypes of the resolved class, excluding the resolved class itself. |
+| T08 | The `keyType` on an attribute of kind `map` MUST be a primitive type name from §7. |
 
 ### 16.3 Inheritance Rules
 
@@ -1234,9 +1238,9 @@ An OOML artefact (class or attribute definition) is **valid** if and only if all
 | I01 | Every FQN range in `extends` MUST resolve to a known class within the resolution context. |
 | I02 | A class MUST NOT extend itself (direct or transitive cycle via inheritance edges). |
 | I03 | A class MUST NOT extend a class marked `final: true`. |
-| I04 | A class MUST NOT declare an attribute slot whose name conflicts with any non-`local` inherited slot's canonical local name. |
-| I05 | A class marked `abstract: false` MUST provide (via its own or inherited slots) all required non-`local` attribute slots needed for instantiation. |
-| I06 | A class MUST NOT declare an attribute slot that shadows a `final: true` slot in any ancestor. |
+| I04 | A class MUST NOT declare an attribute whose name conflicts with any non-`local` inherited attribute's canonical local name. |
+| I05 | A class marked `abstract: false` MUST provide (via its own or inherited attributes) all required non-`local` attributes needed for instantiation. |
+| I06 | A class MUST NOT declare an attribute that shadows a `final: true` attribute in any ancestor. |
 
 ### 16.4 Alias Rules
 
@@ -1244,7 +1248,7 @@ An OOML artefact (class or attribute definition) is **valid** if and only if all
 |---------|-------------|
 | A01 | The FQN range in an alias declaration MUST match at least one attribute in the class's resolved attribute set. |
 | A02 | A given attribute FQN MUST NOT be the target of more than one alias within the same class declaration. |
-| A03 | An alias name MUST NOT collide with any own attribute slot name in the same class. |
+| A03 | An alias name MUST NOT collide with any own attribute identifier in the same class. |
 | A04 | An alias name MUST NOT collide with the unambiguous canonical local name of any attribute in the class's resolved set. |
 | A05 | A subclass MUST NOT declare an alias name already used by any ancestor for a different attribute FQN. |
 
@@ -1256,22 +1260,22 @@ An OOML artefact (class or attribute definition) is **valid** if and only if all
 | M02 | A subclass MUST NOT set a value for a metadata entry that is marked `final: true` in any ancestor. |
 | M03 | A subclass MUST NOT declare a metadata entry as `local: true` for a slot that is non-local in any ancestor. |
 | M04 | A required metadata slot declaration (`required: true`, `value: null`) inherited from an ancestor MUST be satisfied (a non-null value set) somewhere in the inheritance chain before the class is considered fully valid for instantiation. |
-| M05 | The `value` of a metadata entry MUST conform to the type declared for that attribute slot in the metadata schema class. |
+| M05 | The `value` of a metadata entry MUST conform to the type declared for that attribute in the metadata schema class. |
 | M06 | Each key in the `metadata` object MUST be a syntactically valid FQN range resolving to a known class within the resolution context. |
 
 ### 16.6 Dependency Rules
 
 | Rule ID | Description |
 |---------|-------------|
-| D01 | All version ranges appearing in `extends`, attribute slot `type`/`valueType`/`keyType` properties, `aliases` values, and `metadata` object keys MUST be syntactically valid per §14.3. |
-| D02 | The dependency graph, derived from `extends`, `object`, `attribute-import`, and `metadata` edges, MUST be acyclic. Self-referential `class` and `enum` slot edges are exempt (they are class-hierarchy references, not structural embedding). |
+| D01 | All version ranges appearing in `extends`, attribute `type`/`valueType`/`keyType` properties, `aliases` values, and `metadata` object keys MUST be syntactically valid per §14.3. |
+| D02 | The dependency graph, derived from `extends`, `object`, `attribute-import`, and `metadata` edges, MUST be acyclic. Self-referential `class` and `enum` attribute edges are exempt (they are class-hierarchy references, not structural embedding). |
 | D03 | All referenced version ranges SHOULD be satisfiable by at least one known artefact version within the resolution context at the time of validation. |
 
 ### 16.7 Versioning Rules
 
 | Rule ID | Description |
 |---------|-------------|
-| V01 | Within a given resolution context, a new version of a class or attribute definition MUST have a strictly higher version number than all previously known versions of the same FQN base name. |
+| V01 | Within a given resolution context, a new version of a class or global attribute MUST have a strictly higher version number than all previously known versions of the same FQN base name. |
 | V02 | A change classified as MAJOR per §6.4 MUST result in a MAJOR version increment. |
 | V03 | A change classified as MINOR per §6.5 MUST result in at least a MINOR version increment. |
 | V04 | OOML RECOMMENDS that artefact versions be treated as immutable once distributed. Distribution systems SHOULD reject attempts to overwrite an existing versioned artefact. |
@@ -1280,11 +1284,11 @@ An OOML artefact (class or attribute definition) is **valid** if and only if all
 
 ## 17. Complete Example
 
-The following example demonstrates multi-inheritance, standalone attribute definitions, aliases, and metadata. All artefacts are shown in their distributed form with full FQNs.
+The following example demonstrates multi-inheritance, standalone global attributes, aliases, and metadata. All artefacts are shown in their distributed form with full FQNs.
 
-### 17.1 Standalone Attribute Definition and Enum Root
+### 17.1 Standalone Global Attribute and Enum Root
 
-`Salary` is published as a standalone attribute definition, usable by any class:
+`Salary` is published as a standalone global attribute, usable by any class:
 
 ```json
 {
@@ -1451,7 +1455,7 @@ com.example.hr/EmploymentType@1.0.0  (enum root)
 └── com.example.hr/Freelance@1.0.0
 ```
 
-`EmploymentType` and its subtypes are ordinary classes. The `employmentType` slot on `Employee` uses `"kind": "enum"` to restrict values to subtypes of `EmploymentType`, excluding `EmploymentType` itself — so valid values are `FullTime`, `PartTime`, `Contract`, `Freelance`, or any future subtype.
+`EmploymentType` and its subtypes are ordinary classes. The `employmentType` attribute on `Employee` uses `"kind": "enum"` to restrict values to subtypes of `EmploymentType`, excluding `EmploymentType` itself — so valid values are `FullTime`, `PartTime`, `Contract`, `Freelance`, or any future subtype.
 
 MRO of `Employee@1.2.0` (depth-first, left-to-right):
 `Employee` → `Person` → `Party` → `Auditable`
@@ -1523,34 +1527,34 @@ The following ABNF provides a normative grammar for the non-JSON structural elem
 
 ```abnf
 ; Namespace
-namespace        = lc-segment 1*("." lc-segment)
-lc-segment       = LOWER *( LOWER / DIGIT )
+namespace         = lc-segment 1*("." lc-segment)
+lc-segment        = LOWER *( LOWER / DIGIT )
 
 ; Names
-class-name       = UPPER *( ALPHA / DIGIT )        ; PascalCase (classes and enum roots)
-attrdef-name     = UPPER *( ALPHA / DIGIT )        ; PascalCase
-attr-slot-name   = LOWER *( ALPHA / DIGIT )        ; camelCase
-alias-name       = LOWER *( ALPHA / DIGIT )        ; camelCase
-group-name       = LOWER *( LOWER / DIGIT / "-" )
+class-name        = UPPER *( ALPHA / DIGIT )        ; PascalCase (classes and enum roots)
+global-attr-name  = UPPER *( ALPHA / DIGIT )        ; PascalCase
+attr-name         = LOWER *( ALPHA / DIGIT )        ; camelCase
+alias-name        = LOWER *( ALPHA / DIGIT )        ; camelCase
+group-name        = LOWER *( LOWER / DIGIT / "-" )
 
 ; Version (exact)
-version          = major "." minor "." trivial [ pre-release ] [ build ]
-major            = non-neg-int
-minor            = non-neg-int
-trivial          = non-neg-int
-pre-release      = "-" identifier *("." identifier)
-build            = "+" identifier *("." identifier)
-identifier       = 1*( ALPHA / DIGIT / "-" )
-non-neg-int      = "0" / ( %x31-39 *DIGIT )
+version           = major "." minor "." trivial [ pre-release ] [ build ]
+major             = non-neg-int
+minor             = non-neg-int
+trivial           = non-neg-int
+pre-release       = "-" identifier *("." identifier)
+build             = "+" identifier *("." identifier)
+identifier        = 1*( ALPHA / DIGIT / "-" )
+non-neg-int       = "0" / ( %x31-39 *DIGIT )
 
 ; FQN (exact version — OOML artefact identities)
-class-fqn        = namespace "/" class-name    "@" version
-attrdef-fqn      = namespace "/" attrdef-name  "@" version
-owned-attr-fqn   = class-fqn "#" attr-slot-name  ; inline-owned slots only
+class-fqn         = namespace "/" class-name        "@" version
+global-attr-fqn   = namespace "/" global-attr-name  "@" version
+owned-attr-fqn    = class-fqn "#" attr-name  ; inline-owned attributes only
 
 ; FQN range (used in extends, type properties, aliases, metadata keys)
-class-fqn-range   = namespace "/" class-name   "@" version-range
-attrdef-fqn-range = namespace "/" attrdef-name "@" version-range
+class-fqn-range        = namespace "/" class-name       "@" version-range
+global-attr-fqn-range  = namespace "/" global-attr-name "@" version-range
 
 ; Note: enum roots are ordinary classes; no separate enum-fqn form exists
 
@@ -1586,9 +1590,9 @@ JSON is universally supported, human-editable, and requires no specialist toolin
 
 OOML adopts multi-inheritance because real-world modelling requires orthogonal concerns to be composable independently of the primary taxonomic hierarchy. The `Commentable`, `Auditable`, `Taggable` pattern is ubiquitous in practice, and single inheritance forces either combinatorial class explosion or pollution of base classes with concerns that only some subtypes need.
 
-The classical diamond problem — where two ancestors provide different definitions of the same attribute, creating an ambiguous resolution — does not arise in OOML because attributes are identified by FQN, not by local name. Two ancestors can both declare an attribute slot named `temperature` without conflict: if their slots reference different attribute definitions, they are simply different attributes that happen to share a local name. The collision is a presentation inconvenience, handled by aliasing (§13), not an identity or semantic conflict requiring a resolution rule.
+The classical diamond problem — where two ancestors provide different definitions of the same attribute, creating an ambiguous resolution — does not arise in OOML because attributes are identified by FQN, not by local name. Two ancestors can both declare an attribute named `temperature` without conflict: if they reference different global attributes, they are simply different attributes that happen to share a local name. The collision is a presentation inconvenience, handled by aliasing (§13), not an identity or semantic conflict requiring a resolution rule.
 
-The only genuine diamond case — where two ancestors both reference the exact same attribute definition FQN — is resolved by deduplication: the attribute appears once in the resolved set. No precedence rule is needed.
+The only genuine diamond case — where two ancestors both reference the exact same global attribute FQN — is resolved by deduplication: the attribute appears once in the resolved set. No precedence rule is needed.
 
 ### 19.3 Why is the class (not a collection) the unit of versioning?
 
@@ -1600,17 +1604,17 @@ How classes are authored, grouped, and published before they become distributed 
 
 ### 19.5 Why are enumerations not a first-class artefact type?
 
-Early versions of this specification included a dedicated `Enumeration` artefact type. This was removed in 0.4.0 because enumerations are fully subsumed by the class type hierarchy. A class serves as the enumeration root; its subtypes (excluding itself) are the members. This approach reduces the language surface, keeps the number of artefact types minimal, and gives enumeration members genuine expressive power — they can carry attributes, participate in further type hierarchies, and be independently versioned. The `"kind": "enum"` attribute slot preserves the enumerative constraint (subtypes of the root, excluding the root itself) without requiring a separate artefact type.
+Early versions of this specification included a dedicated `Enumeration` artefact type. This was removed in 0.4.0 because enumerations are fully subsumed by the class type hierarchy. A class serves as the enumeration root; its subtypes (excluding itself) are the members. This approach reduces the language surface, keeps the number of artefact types minimal, and gives enumeration members genuine expressive power — they can carry attributes, participate in further type hierarchies, and be independently versioned. The `"kind": "enum"` attribute preserves the enumerative constraint (subtypes of the root, excluding the root itself) without requiring a separate artefact type.
 
-### 19.6 Why are self-referential `class` and `enum` attribute slots exempt from cycle detection?
+### 19.6 Why are self-referential `class` and `enum` attributes exempt from cycle detection?
 
-A `class` or `enum` slot holds a reference to a class in the type hierarchy, not a structural embedding of that class's definition. A class declaring a `class` slot whose `type` is itself — or an ancestor of itself — is expressing a data-level relationship: "the value of this slot is a reference to this class or one of its subtypes." The class does not need to structurally contain or inherit from itself to express this. Similarly, an `enum` slot whose root is an ancestor of the declaring class is simply recording that the slot's value must be chosen from a known set of classes — not that the declaring class structurally depends on itself. Only `object` and `attribute-import` slots create structural embedding dependencies that can form genuine definition cycles.
+A `class` or `enum` attribute holds a reference to a class in the type hierarchy, not a structural embedding of that class's definition. A class declaring a `class` attribute whose `type` is itself — or an ancestor of itself — is expressing a data-level relationship: "the value of this attribute is a reference to this class or one of its subtypes." The class does not need to structurally contain or inherit from itself to express this. Similarly, an `enum` attribute whose root is an ancestor of the declaring class is simply recording that the attribute's value must be chosen from a known set of classes — not that the declaring class structurally depends on itself. Only `object` and `attribute-import` attributes create structural embedding dependencies that can form genuine definition cycles.
 
 ### 19.7 Why `self` resolves to the declaring class rather than the inheriting class
 
-Making `self` covariant — where `self` in a superclass slot resolves to the subclass in each inheriting context — would mean a slot effectively has a different type at each level of the hierarchy. This is a form of implicit type override, which conflicts with OOML's explicit no-override rule (§11.2 rule 3). It also complicates the dependency graph: a covariant `self` slot would create a dependency from every subclass to itself, which is circular.
+Making `self` covariant — where `self` in a superclass attribute resolves to the subclass in each inheriting context — would mean an attribute effectively has a different type at each level of the hierarchy. This is a form of implicit type override, which conflicts with OOML's explicit no-override rule (§11.2 rule 3). It also complicates the dependency graph: a covariant `self` attribute would create a dependency from every subclass to itself, which is circular.
 
-Non-covariant `self` keeps the semantics simple: the slot is typed to the declaring class, and any subclass that wants a self-typed slot with its own type may declare one explicitly. The inherited slot and the new slot have different types and different slot names, which is unambiguous.
+Non-covariant `self` keeps the semantics simple: the attribute is typed to the declaring class, and any subclass that wants a self-typed attribute with its own type may declare one explicitly. The inherited attribute and the new attribute have different types and different attribute identifiers, which is unambiguous.
 
 ### 19.8 Why use OOML itself as the metadata modelling language?
 
