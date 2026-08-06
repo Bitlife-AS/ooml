@@ -115,6 +115,7 @@ The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "S
 | **Enum root** | A class whose subtypes (excluding itself) serve as the valid values of an `enum` attribute; no dedicated artefact type |
 | **Global attribute** | A versioned, named, reusable semantic contract for a typed attribute; a first-class artefact in the OOML identity model, independent of any class |
 | **Attribute** | A named position within a class that either declares an inline type or references a standalone global attribute |
+| **Sub-attribute** | An attribute declared within the `attributes` property of a `nested`-kind attribute; has no identity of its own beyond its position within its containing artefact |
 | **Superclass** | A class whose attributes and type identity are inherited by another class (its subclass) via `extends` |
 | **Subclass** | A class that names one or more classes in its `extends` property, thereby inheriting their attributes |
 | **Supertype** | A class that has one or more descendant classes anywhere in the inheritance chain |
@@ -164,16 +165,20 @@ Every class and global attribute has an FQN that is globally unique:
 ```
 class-fqn      = namespace "/" class-name "@" version
 global-attr-fqn    = namespace "/" global-attr-name "@" version
-owned-attr-fqn = class-fqn "#" attr-name
+owned-attr-fqn = class-fqn "#" attr-path
+attr-path      = attr-name *( "." attr-name )
 ```
 
-`class-fqn` and `global-attr-fqn` are the identities of the two OOML artefact types. Enum roots are ordinary classes and use `class-fqn`. `owned-attr-fqn` identifies an attribute declared inline within a class. Attributes that reference a standalone global attribute are identified by the global attribute's own `global-attr-fqn`, not by a `class-fqn#name` path.
+`class-fqn` and `global-attr-fqn` are the identities of the two OOML artefact types. Enum roots are ordinary classes and use `class-fqn`. `owned-attr-fqn` identifies an attribute declared inline within a class, or a sub-attribute nested within one — `attr-path` is a dot-separated chain of attribute identifiers descending into successive `nested`-kind attributes. Attributes that reference a standalone global attribute are identified by the global attribute's own `global-attr-fqn`, not by a `class-fqn#name` path.
+
+A sub-attribute has no identity of its own: `owned-attr-fqn` with a multi-segment `attr-path` is purely a positional address, useful for documentation and tooling, not an independently resolvable artefact reference. It identifies a position within the containing class, exactly as a single-segment `owned-attr-fqn` already does for an ordinary owned attribute.
 
 Examples:
 
 ```
 com.example.hr/Employee@1.2.0
 com.example.hr/Employee@1.2.0#employeeNumber
+com.example.hr/Employee@1.2.0#homeAddress.streetName
 com.example.hr/EmploymentStatus@1.0.0
 com.example.physics/temperature@1.0.0
 ```
@@ -399,11 +404,12 @@ A global attribute is a JSON object published as a standalone artefact:
 | `description` | string | RECOMMENDED | Human-readable purpose of this global attribute. |
 | `authors` | array of string | RECOMMENDED | Authors in `Name <email>` format. |
 | `license` | string | RECOMMENDED | SPDX licence expression. |
-| `kind` | string | REQUIRED | Structural role. One of: `primitive`, `object`, `class`, `enum`, `list`, `set`, `map`. Same vocabulary as attributes declared within a class (see §9). |
-| `type` | string | REQUIRED (where applicable) | Value type: primitive type name or class FQN range. Same rules as attributes declared within a class. |
+| `kind` | string | REQUIRED | Structural role. One of: `primitive`, `object`, `class`, `enum`, `list`, `set`, `map`, `nested`. Same vocabulary as attributes declared within a class (see §9), except `attribute` — a global attribute cannot reference another global attribute. |
+| `type` | string | REQUIRED (where applicable) | Value type: primitive type name or class FQN range. Same rules as attributes declared within a class. Not present when `kind` is `nested`. |
+| `attributes` | object | REQUIRED (where applicable) | Map of sub-attribute identifier to sub-attribute definition. REQUIRED and non-empty when `kind` is `nested`; not present otherwise. Same structure and rules as a class's `attributes` property (§9). |
 | `deprecated` | string | OPTIONAL | If present, this artefact is deprecated; the value is the deprecation message. MUST be a non-empty string. Omit when not deprecated. |
 
-All additional type-specific properties that apply to an attribute of the given `kind` (e.g. `minLength`, `pattern`, `precision`, `scale`, `valueKind`, `valueType`, `keyType`) also apply to global attributes.
+All additional type-specific properties that apply to an attribute of the given `kind` (e.g. `minLength`, `pattern`, `precision`, `scale`, `valueKind`, `valueType`, `keyType`) also apply to global attributes. A global attribute of `kind` `nested` allows the same recursive nesting as a class attribute of `kind` `nested` (§9.10) — this is the mechanism for publishing a reusable, independently-versioned nested shape, referenced from any class the ordinary way via `"kind": "attribute"`.
 
 ### 7.3 FQN of a Global Attribute
 
@@ -526,8 +532,8 @@ Every attribute, regardless of `kind`, shares the following properties:
 
 | Property | Type | Required | Default | Description |
 |----------|------|----------|---------|-------------|
-| `kind` | string | REQUIRED | — | Structural role of this attribute. One of: `primitive`, `object`, `class`, `enum`, `list`, `set`, `map`, `attribute`. |
-| `type` | string | REQUIRED (see §9.2) | — | Value type. A primitive type name (§6), a class FQN range, a global attribute FQN range, or `"self"` (see §4.3), depending on `kind`. Not present on `list`, `set`, and `map` — those use `valueKind` and `valueType` instead. |
+| `kind` | string | REQUIRED | — | Structural role of this attribute. One of: `primitive`, `object`, `class`, `enum`, `list`, `set`, `map`, `attribute`, `nested`. |
+| `type` | string | REQUIRED (see §9.2) | — | Value type. A primitive type name (§6), a class FQN range, a global attribute FQN range, or `"self"` (see §4.3), depending on `kind`. Not present on `list`, `set`, and `map` — those use `valueKind` and `valueType` instead. Not present on `nested` — see `attributes` below. |
 | `name` | string | REQUIRED | — | Free-form human-readable label for this attribute. Independent of the attribute identifier used as its JSON property name. |
 | `description` | string | RECOMMENDED | — | Human-readable purpose of this attribute. |
 | `required` | boolean | OPTIONAL | `false` | Whether instances of this class MUST carry a value for this attribute. Applies only to non-static attributes (see rule S11). |
@@ -757,6 +763,45 @@ An attribute that references a standalone global attribute (see §9). The attrib
 | `type` | REQUIRED | FQN range of the global attribute. |
 
 All common properties (`name`, `required`, `nullable`, `static`, `local`, `final`, `deprecated`) apply to attributes of kind `attribute`. The structural properties of the value (`kind`, `type`, and type-specific constraints) are inherited from the referenced global attribute and MUST NOT be redeclared on the attribute. The `description` on the attribute is the context-specific description within this class; the global attribute's own `description` is the canonical domain description.
+
+### 9.10 Kind: `nested`
+
+An ad hoc, locally-scoped data structure with no independent identity, described inline by its own `attributes` property — using the same structure as a class's `attributes` property (§9.1). A `nested` attribute has no `type`; its shape is entirely defined by its sub-attributes.
+
+```json
+"homeAddress": {
+	"kind": "nested",
+	"name": "Home Address",
+	"required": true,
+	"description": "The address the employee has registered as primary residence in the national register.",
+	"attributes": {
+		"streetName": {
+			"kind": "primitive", "type": "string",
+			"name": "Street Name",
+			"required": true,
+			"description": "The name of the street of primary residence."
+		},
+		"houseNumber": {
+			"kind": "primitive", "type": "string",
+			"name": "House Number",
+			"required": true,
+			"description": "The house number of primary residence."
+		}
+	}
+}
+```
+
+| Property | Required | Description |
+|----------|----------|-------------|
+| `attributes` | REQUIRED | Map of sub-attribute identifier to sub-attribute definition. MUST be non-empty. Uses the same structure and validation rules as a class's `attributes` property (§9.1, §8.2). |
+
+A sub-attribute MAY itself be of kind `nested`, allowing arbitrarily deep nesting. Each level's `attributes` map follows exactly the same rules as any other attribute map, including its own attribute identifiers, common properties, and kind-specific properties. A global attribute MAY also be of kind `nested` (§7.2), providing a way to publish a reusable, independently-versioned nested shape rather than declaring the same structure inline in every class that needs it.
+
+A `nested` attribute MUST NOT have `type`, `valueKind`, `valueType`, `keyKind`, or `keyType`. `extends`, `aliases`, and `metadata` are not valid within a nested attribute's structure — a nested attribute is not a class, and does not carry class-level concepts such as inheritance or an independent metadata surface.
+
+Nested attributes have no FQN of their own: they are never resolved independently and never appear as nodes in the dependency graph. Any dependency arising from a sub-attribute (for example, a `class`-kind sub-attribute referencing another class) attaches to the nearest containing artefact — the class or global attribute the nested attribute is, at any depth, ultimately declared within — exactly as an ordinary top-level attribute's dependencies do. Nesting is structurally transparent for dependency-graph purposes: it introduces no new edge type or node type (§14.2).
+
+A sub-attribute MAY be addressed, for documentation or tooling purposes, using the dotted extension of the owned attribute FQN form (§4.2): `com.example.hr/Employee@1.2.0#homeAddress.streetName`. This identifies the sub-attribute's position within its containing artefact; it is not an independent FQN, since a sub-attribute has no identity beyond that position.
 
 ---
 
@@ -1104,6 +1149,8 @@ Edges arise from the following sources:
 
 A self-referential `"self"` token (§4.3) resolves to the declaring class's own FQN once expanded, and is treated identically to an explicit self-referential FQN for edge purposes.
 
+A `nested`-kind attribute introduces no edge of its own: it has no `type` and no FQN. Edges arising from its sub-attributes (at any depth) are attributed to the nearest containing artefact — the class or global attribute the nested structure is ultimately declared within — exactly as if those sub-attributes were declared directly on that artefact. Nesting is structurally transparent to the dependency graph (§9.10).
+
 Tools MAY distinguish edge types in visualisations and impact analysis.
 
 ### 14.3 Version Range Syntax
@@ -1222,6 +1269,8 @@ An OOML artefact (class or global attribute) is **valid** if and only if all app
 | T06 | When `valueKind` is `primitive`, `valueType` MUST be a valid primitive type name (§6). |
 | T07 | When `valueKind` is `object`, `class`, or `enum`, `valueType` MUST resolve to a known class. When `valueKind` is `attribute`, `valueType` MUST resolve to a known global attribute. For `valueKind: "enum"`, valid values are subtypes of the resolved class, excluding the resolved class itself. |
 | T08 | The `keyType` on an attribute of kind `map` MUST be a primitive type name from §7. |
+| T09 | An attribute of kind `nested` MUST NOT have `type`, `valueKind`, `valueType`, `keyKind`, or `keyType`. |
+| T10 | An attribute of kind `nested` MUST have a non-empty `attributes` property, validated per the same rules as a class's `attributes` property (§9.1, §8.2). This applies equally to a global attribute of kind `nested` (§7.2). |
 
 ### 16.3 Inheritance Rules
 
@@ -1542,7 +1591,8 @@ non-neg-int       = "0" / ( %x31-39 *DIGIT )
 ; FQN (exact version — OOML artefact identities)
 class-fqn         = namespace "/" class-name        "@" version
 global-attr-fqn   = namespace "/" global-attr-name  "@" version
-owned-attr-fqn    = class-fqn "#" attr-name  ; inline-owned attributes only
+owned-attr-fqn    = class-fqn "#" attr-path  ; inline-owned attributes and sub-attributes
+attr-path         = attr-name *( "." attr-name )
 
 ; FQN range (used in extends, type properties, aliases, metadata keys)
 class-fqn-range        = namespace "/" class-name       "@" version-range

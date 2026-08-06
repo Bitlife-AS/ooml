@@ -87,7 +87,8 @@
 				"list",
 				"set",
 				"map",
-				"attribute"
+				"attribute",
+				"nested"
 			]
 		},
 		"nonEmptyString": {
@@ -630,6 +631,9 @@
 				},
 				{
 					"$ref": "#/$defs/globalAttributeReference"
+				},
+				{
+					"$ref": "#/$defs/nestedAttribute"
 				}
 			]
 		},
@@ -817,6 +821,10 @@
 				},
 				"metadata": {
 					"$ref": "#/$defs/metadataObject"
+				},
+				"attributes": {
+					"$ref": "#/$defs/attributesObject",
+					"description": "Map of sub-attribute identifier to sub-attribute definition. Only meaningful (and required) when kind is 'nested'."
 				}
 			},
 			"required": [
@@ -826,6 +834,40 @@
 				"kind"
 			],
 			"additionalProperties": false
+		},
+		"nestedAttribute": {
+			"description": "An attribute of kind 'nested': an ad hoc, locally-scoped data structure with no independent identity, described inline by its own 'attributes' property. Supports arbitrary nesting depth via recursion.",
+			"allOf": [
+				{
+					"$ref": "#/$defs/commonAttributeProperties"
+				},
+				{
+					"type": "object",
+					"properties": {
+						"kind": {
+							"const": "nested"
+						},
+						"attributes": {
+							"$ref": "#/$defs/attributesObject",
+							"minProperties": 1
+						},
+						"name": {},
+						"description": {},
+						"required": {},
+						"nullable": {},
+						"static": {},
+						"value": {},
+						"local": {},
+						"final": {},
+						"deprecated": {}
+					},
+					"required": [
+						"kind",
+						"attributes"
+					],
+					"additionalProperties": false
+				}
+			]
 		}
 	},
 	"oneOf": [
