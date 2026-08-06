@@ -192,7 +192,7 @@ The literal string `"self"` is a reserved authoring token. It may appear in any 
 
 ```json
 "manager": {
-	"kind": "class",
+	"kind": "object",
 	"type": "self",
 	"name": "Manager",
 	"description": "This employee's direct line manager.",
@@ -204,7 +204,7 @@ When committed as `com.example.hr/Employee@1.3.0`, the above expands to:
 
 ```json
 "manager": {
-	"kind": "class",
+	"kind": "object",
 	"type": "com.example.hr/Employee@^1.3.0",
 	"name": "Manager",
 	"description": "This employee's direct line manager.",
@@ -439,7 +439,7 @@ Global attributes follow the same change-impact contract as classes (§6). Becau
 
 ### 7.6 Global Attributes and the Dependency Graph
 
-When a class references a global attribute, this is read as an edge in the (derived) dependency graph from the class to the global attribute. This edge is of type `attribute-import` and participates in cycle detection (an `object`-kind global attribute that referenced the importing class would create a structural cycle and is rejected by rule D02).
+When a class references a global attribute, this is read as an edge in the (derived) dependency graph from the class to the global attribute. This edge is of type `attribute-import` and participates in cycle detection (rule D02), since importing a global attribute incorporates its constraints into the class's own definition — the same structural reasoning that applies to `extends` and `metadata` edges.
 
 Enum roots are ordinary classes. A dependency on an enum root appears as a standard class edge in the dependency graph, identical to any other class dependency.
 
@@ -606,27 +606,11 @@ Additional properties that constrain the value, applicable by primitive type:
 
 ### 9.3 Kind: `object`
 
-An inline, nested object conforming to a named class, embedded by value with no independent identity.
-
-```json
-"address": {
-	"kind": "object",
-	"type": "com.example.hr/PostalAddress@^1.0.0",
-	"name": "Address",
-	"description": "The employee's primary postal address.",
-	"nullable": true
-}
-```
-
-`type` MUST be a class FQN range resolving to a known class, or `"self"` (see §4.3).
-
-### 9.4 Kind: `class`
-
-A pointer to an instance of a named class, identified by that instance's identity. OOML does not prescribe how identity is encoded; it only constrains the type of the instance being referenced.
+A reference to an **instance** of a named class, or an instance of any subtype, identified by that instance's identity. OOML does not prescribe how identity is encoded; it only constrains the type of the instance being referenced.
 
 ```json
 "department": {
-	"kind": "class",
+	"kind": "object",
 	"type": "com.example.hr/Department@^1.0.0",
 	"name": "Department",
 	"description": "The department this employee belongs to.",
@@ -636,13 +620,20 @@ A pointer to an instance of a named class, identified by that instance's identit
 
 `type` MUST be a class FQN range resolving to a known class, or `"self"` (see §4.3).
 
-**`object` vs `class`:**
+### 9.4 Kind: `class`
 
-| | `object` | `class` |
-|-|----------|---------|
-| Semantics | Embedded by value | Pointer to an identity |
-| Lifecycle | Owned by parent | Independent |
-| Identity | None | Has its own identity |
+A reference to a **class** — the named class itself, or any of its subtypes. The value is a class, not an instance of one: it identifies a type, not a record.
+
+```json
+"legacyType": {
+	"kind": "class",
+	"type": "com.example.equipment/DrillPipe@^1.0.0",
+	"name": "Legacy Type",
+	"description": "The equipment class this record was classified under in a prior system, retained for migration compatibility. May reference DrillPipe or any of its subtypes."
+}
+```
+
+`type` MUST be a class FQN range resolving to a known class, or `"self"` (see §4.3).
 
 ### 9.5 Kind: `enum`
 
@@ -926,7 +917,7 @@ A class declares its superclass or superclasses using the `extends` property. `e
 	"attributes": {
 		"employeeNumber": { "kind": "primitive", "type": "string", "name": "Employee Number", "required": true, "description": "Employee reference number." },
 		"startDate":      { "kind": "primitive", "type": "date",   "name": "Start Date",      "required": true, "description": "Employment start date." },
-		"manager":        { "kind": "class",     "type": "self",   "name": "Manager",         "description": "Direct line manager." }
+		"manager":        { "kind": "object",     "type": "self",   "name": "Manager",         "description": "Direct line manager." }
 	}
 }
 ```
@@ -1103,8 +1094,8 @@ Edges arise from the following sources:
 | Source | Edge meaning |
 |--------|-------------|
 | `extends` property (each entry) | Inheritance dependency: the subclass structurally incorporates the superclass |
-| `object` attribute `type` property | Composition dependency: the class embeds instances of another class by value |
-| `class` attribute `type` property | Reference dependency: the class refers to instances of another class by identity |
+| `object` attribute `type` property | Reference dependency: the class refers to an instance of another class by identity |
+| `class` attribute `type` property | Class reference dependency: the class refers to another class itself, or any of its subtypes |
 | `enum` attribute `type` property | Enum root dependency: the class references a class as an enum root |
 | `attribute`-kind attribute `type` property | Attribute import dependency: the class uses a standalone global attribute |
 | `list`, `set`, or `map` `valueType`/`keyType` property | Collection element dependency |
@@ -1131,7 +1122,7 @@ For MAJOR version 0, `^0.y.z` is treated as `~0.y.z`, reflecting the initial-dev
 
 ### 14.4 Acyclicity
 
-The dependency graph MUST be acyclic across `extends`, `object`, `attribute-import`, and `metadata` edges. Self-referential `class` and `enum` attribute edges — including those declared via `"self"` — are exempt: they are class-hierarchy references, not structural embedding, and do not constitute a definition cycle (see §19.6 for the underlying rationale).
+The dependency graph MUST be acyclic across `extends`, `attribute-import`, and `metadata` edges. Self-referential `object`, `class`, and `enum` attribute edges — including those declared via `"self"` — are exempt: all three are references by identity to a class or an instance, not structural embedding, and do not constitute a definition cycle (see §19.6 for the underlying rationale).
 
 ### 14.5 Resolution
 
@@ -1145,8 +1136,8 @@ Because the dependency graph is a flat graph of class nodes with no package-leve
 |-------|-----|
 | Direct dependents of C | Find all nodes with an edge pointing to C |
 | All classes that extend C | Filter edges to inheritance type |
-| All classes that reference C by identity | Filter edges to `class` type |
-| All classes that embed C by value | Filter edges to `object` type |
+| All classes that reference C by instance identity | Filter edges to `object` type |
+| All classes that reference C as a class itself | Filter edges to `class` type |
 | Impact of a MAJOR change to C | BFS/DFS over dependent edges from C |
 | Full ancestry of C | Traverse `extends` edges from C to root |
 | All subtypes of C | Traverse `extends` edges inbound to C, recursively |
@@ -1269,7 +1260,7 @@ An OOML artefact (class or global attribute) is **valid** if and only if all app
 | Rule ID | Description |
 |---------|-------------|
 | D01 | All version ranges appearing in `extends`, attribute `type`/`valueType`/`keyType` properties, `aliases` values, and `metadata` object keys MUST be syntactically valid per §14.3. |
-| D02 | The dependency graph, derived from `extends`, `object`, `attribute-import`, and `metadata` edges, MUST be acyclic. Self-referential `class` and `enum` attribute edges are exempt (they are class-hierarchy references, not structural embedding). |
+| D02 | The dependency graph, derived from `extends`, `attribute-import`, and `metadata` edges, MUST be acyclic. Self-referential `object`, `class`, and `enum` attribute edges are exempt (they are references by identity to a class or an instance, not structural embedding). |
 | D03 | All referenced version ranges SHOULD be satisfiable by at least one known artefact version within the resolution context at the time of validation. |
 
 ### 16.7 Versioning Rules
@@ -1407,14 +1398,14 @@ A metadata schema class `HrSchemaInfo` is published as an ordinary class:
 			"nullable": true
 		},
 		"department": {
-			"kind": "class",
+			"kind": "object",
 			"type": "com.example.hr/Department@^1.0.0",
 			"name": "Department",
 			"required": true,
 			"description": "The organisational unit this employee belongs to."
 		},
 		"manager": {
-			"kind": "class",
+			"kind": "object",
 			"type": "com.example.hr/Employee@^1.2.0",
 			"name": "Manager",
 			"description": "Direct line manager.",
@@ -1487,8 +1478,8 @@ Full resolved attribute surface of an `Employee` instance (in MRO order):
 ```
 com.example.hr/Employee@1.2.0
   --[extends]-->          com.example.hr/Person@^1.0.0
-  --[class]-->            com.example.hr/Department@^1.0.0
-  --[class]-->            com.example.hr/Employee@^1.2.0   (self-reference; exempt)
+  --[object]-->           com.example.hr/Department@^1.0.0
+  --[object]-->           com.example.hr/Employee@^1.2.0   (self-reference; exempt)
   --[enum]-->             com.example.hr/EmploymentType@^1.0.0
   --[attribute-import]--> com.example.finance/salary@^1.0.0
   --[alias]-->            com.example.finance/salary@^1.0.0
@@ -1502,7 +1493,7 @@ com.example.hr/Party@1.1.0
 
 com.example.hr/Department@1.0.0
   --[extends]-->   com.example.hr/Party@^1.1.0
-  --[class]-->     com.example.hr/Department@^1.0.0  (self-reference; exempt)
+  --[object]-->    com.example.hr/Department@^1.0.0  (self-reference; exempt)
 
 com.example.hr/PostalAddress@1.0.0
   --[enum]-->        com.example.hr/AddressType@^1.0.0
@@ -1511,9 +1502,9 @@ com.example.hr/PostalAddress@1.0.0
 **Example dependency insight query:** "What directly depends on `com.example.hr/Department@1.0.0`?"
 
 Result (from any tooling that indexes the dependency graph):
-- `com.example.hr/Employee@1.2.0` (class edge)
-- `com.example.hr/Contractor@1.0.0` (set element class edge)
-- `com.example.hr/Department@1.0.0` (self-reference class edge)
+- `com.example.hr/Employee@1.2.0` (object edge)
+- `com.example.hr/Contractor@1.0.0` (set element object edge)
+- `com.example.hr/Department@1.0.0` (self-reference object edge)
 
 **Example dependency insight query:** "What directly depends on `com.example.finance/salary@1.0.0`?"
 
@@ -1607,9 +1598,9 @@ How classes are authored, grouped, and published before they become distributed 
 
 Early versions of this specification included a dedicated `Enumeration` artefact type. This was removed in 0.4.0 because enumerations are fully subsumed by the class type hierarchy. A class serves as the enumeration root; its subtypes (excluding itself) are the members. This approach reduces the language surface, keeps the number of artefact types minimal, and gives enumeration members genuine expressive power — they can carry attributes, participate in further type hierarchies, and be independently versioned. The `"kind": "enum"` attribute preserves the enumerative constraint (subtypes of the root, excluding the root itself) without requiring a separate artefact type.
 
-### 19.6 Why are self-referential `class` and `enum` attributes exempt from cycle detection?
+### 19.6 Why are self-referential `object`, `class`, and `enum` attributes exempt from cycle detection?
 
-A `class` or `enum` attribute holds a reference to a class in the type hierarchy, not a structural embedding of that class's definition. A class declaring a `class` attribute whose `type` is itself — or an ancestor of itself — is expressing a data-level relationship: "the value of this attribute is a reference to this class or one of its subtypes." The class does not need to structurally contain or inherit from itself to express this. Similarly, an `enum` attribute whose root is an ancestor of the declaring class is simply recording that the attribute's value must be chosen from a known set of classes — not that the declaring class structurally depends on itself. Only `object` and `attribute-import` attributes create structural embedding dependencies that can form genuine definition cycles.
+An `object`, `class`, or `enum` attribute holds a reference by identity — to an instance, to a class, or to a subtype-class respectively — never a structural embedding of another artefact's definition. A class declaring an `object` attribute whose `type` is itself (e.g. `Employee.manager: Employee`) is expressing a data-level relationship: "the value of this attribute is a reference to an instance of this class or one of its subtypes." The class does not need to structurally contain or inherit from itself to express this. The same reasoning applies to a `class` attribute whose `type` is itself or an ancestor of itself ("the value of this attribute is a reference to this class or one of its subtypes," as a type-tag rather than an instance), and to an `enum` attribute whose root is an ancestor of the declaring class ("the value must be chosen from a known set of classes"). In every case, the declaring class's own shape does not depend on the referenced class's shape — only its identity is recorded. Only `extends`, `attribute-import`, and `metadata` create structural dependencies, where one artefact's own definition genuinely incorporates another's, and can therefore form genuine definition cycles.
 
 ### 19.7 Why `self` resolves to the declaring class rather than the inheriting class
 

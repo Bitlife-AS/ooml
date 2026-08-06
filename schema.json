@@ -19,16 +19,6 @@
 			"description": "Reverse-domain namespace: one or more lowercase alphanumeric segments separated by dots.",
 			"pattern": "^[a-z][a-z0-9]*(\\.[a-z][a-z0-9]*)+$"
 		},
-		"artefactName": {
-			"type": "string",
-			"description": "PascalCase artefact name (classes and enum roots).",
-			"pattern": "^[A-Z][A-Za-z0-9]*$"
-		},
-		"globalAttrName": {
-			"type": "string",
-			"description": "camelCase global attribute name.",
-			"pattern": "^[a-z][a-zA-Z0-9]*$"
-		},
 		"classFqn": {
 			"type": "string",
 			"description": "Exact FQN of a class: namespace/ClassName@version",
@@ -320,7 +310,7 @@
 			]
 		},
 		"objectAttribute": {
-			"description": "An attribute of kind 'object': instance reference embedded by value.",
+			"description": "An attribute of kind 'object': reference to an instance of a class or any subtype, identified by that instance's identity.",
 			"allOf": [
 				{
 					"$ref": "#/$defs/commonAttributeProperties"
