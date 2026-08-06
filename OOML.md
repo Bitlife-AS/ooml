@@ -685,9 +685,11 @@ An ordered sequence of values of a declared value type. Duplicate values are per
 | Property | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `valueKind` | REQUIRED | — | Kind of each value. Same vocabulary as attribute kinds. |
-| `valueType` | REQUIRED (where applicable) | — | Type of each value. A primitive type name, class FQN range, global attribute FQN range, or `"self"`, consistent with `valueKind`. For `valueKind: "enum"`, valid values are subtypes of the named class, excluding the named class itself. |
+| `valueType` | REQUIRED (where applicable) | — | Shape of each value. A primitive type name, class FQN range, global attribute FQN range, or `"self"`, consistent with `valueKind` — **except** when `valueKind` is `nested`, in which case `valueType` is itself a map of sub-attribute identifier to sub-attribute definition, using exactly the same structure as an `attributes` property (§9.10). For `valueKind: "enum"`, valid values are subtypes of the named class, excluding the named class itself. |
 | `minItems` | OPTIONAL | — | Minimum number of values (inclusive). |
 | `maxItems` | OPTIONAL | — | Maximum number of values (inclusive). |
+
+`valueType` and `attributes` play different roles and are never interchangeable: `attributes` (§8.2, §9.10) describes what the artefact or attribute *declaring it* is itself composed of. `valueType` describes the shape of *each value held by* a collection — the collection attribute itself is not that shape, its elements are. When that shape has no external name (`valueKind: "nested"`), `valueType` carries it inline; when it does (every other `valueKind`), `valueType` is a compact string identifier for it. The property differs in representation, never in role.
 
 ### 9.7 Kind: `set`
 
@@ -707,9 +709,36 @@ An unordered collection of values of a declared value type. Duplicate values are
 
 Properties are identical to `list` (§9.6).
 
+A set MAY hold nested values, using `valueKind: "nested"` with `valueType` as an inline sub-attribute map:
+
+```json
+"addresses": {
+	"kind": "set",
+	"valueKind": "nested",
+	"valueType": {
+		"streetName": {
+			"kind": "primitive", "type": "string",
+			"name": "Street Name",
+			"required": true,
+			"description": "The name of the street of this address."
+		},
+		"houseNumber": {
+			"kind": "primitive", "type": "string",
+			"name": "House Number",
+			"required": true,
+			"description": "The house number of this address."
+		}
+	},
+	"name": "Addresses",
+	"description": "Postal addresses associated with this employee."
+}
+```
+
+Because nested values have no identity of their own (§9.10), duplicate detection for a `set` of nested values is necessarily structural rather than identity-based: two nested values are duplicates, and MUST NOT coexist in the same set, if and only if they are deeply equal — every sub-attribute holds an identical value, recursively, such that the two would produce byte-identical canonical JSON serialisations. This is a direct consequence of the general "no duplicates" rule (§9.7), not a separate rule: nested values simply have no other basis for comparison.
+
 ### 9.8 Kind: `map`
 
-A collection of key-value pairs. Keys MUST be unique within an instance. Both keys and values may be of any attribute kind.
+A collection of key-value pairs. Keys MUST be unique within an instance. Values may be of any attribute kind, including `nested`. Keys MUST NOT be `nested`: a map key requires a well-defined notion of equality for lookup, which a nested structure does not provide as reliably as a scalar, identity-bearing, or class-referencing value does.
 
 ```json
 "localizedTitles": {
@@ -735,10 +764,10 @@ When `keyKind` and `keyType` are omitted the map has `primitive`/`string` keys �
 
 | Property | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `keyKind` | OPTIONAL | `primitive` | Kind of each map key. Same vocabulary as attribute kinds. |
+| `keyKind` | OPTIONAL | `primitive` | Kind of each map key. One of `primitive`, `object`, `class`, `enum`, `attribute`. MUST NOT be `nested`. |
 | `keyType` | OPTIONAL | `string` | Type of each map key. A primitive type name, class FQN range, or global attribute FQN range, consistent with `keyKind`. |
-| `valueKind` | REQUIRED | — | Kind of each map value. Same vocabulary as attribute kinds. |
-| `valueType` | REQUIRED (where applicable) | — | Type of each map value. A primitive type name, class FQN range, global attribute FQN range, or `"self"`, consistent with `valueKind`. For `valueKind: "enum"`, valid values are subtypes of the named class, excluding the named class itself. |
+| `valueKind` | REQUIRED | — | Kind of each map value. Same vocabulary as attribute kinds, including `nested`. |
+| `valueType` | REQUIRED (where applicable) | — | Shape of each map value. A primitive type name, class FQN range, global attribute FQN range, or `"self"`, consistent with `valueKind` — or, when `valueKind` is `nested`, an inline sub-attribute map, exactly as for `list` and `set` (§9.6). For `valueKind: "enum"`, valid values are subtypes of the named class, excluding the named class itself. |
 | `minItems` | OPTIONAL | — | Minimum number of entries (inclusive). |
 | `maxItems` | OPTIONAL | — | Maximum number of entries (inclusive). |
 
@@ -798,6 +827,8 @@ An ad hoc, locally-scoped data structure with no independent identity, described
 A sub-attribute MAY itself be of kind `nested`, allowing arbitrarily deep nesting. Each level's `attributes` map follows exactly the same rules as any other attribute map, including its own attribute identifiers, common properties, and kind-specific properties. A global attribute MAY also be of kind `nested` (§7.2), providing a way to publish a reusable, independently-versioned nested shape rather than declaring the same structure inline in every class that needs it.
 
 A `nested` attribute MUST NOT have `type`, `valueKind`, `valueType`, `keyKind`, or `keyType`. `extends`, `aliases`, and `metadata` are not valid within a nested attribute's structure — a nested attribute is not a class, and does not carry class-level concepts such as inheritance or an independent metadata surface.
+
+A `list`, `set`, or `map` MAY hold nested values via `valueKind: "nested"`, in which case the collection attribute's `valueType` — not `attributes` — carries the sub-attribute map, since it is each collection element that has the nested shape, not the collection attribute itself (§9.6). A map's *keys* MUST NOT be nested (§9.8).
 
 Nested attributes have no FQN of their own: they are never resolved independently and never appear as nodes in the dependency graph. Any dependency arising from a sub-attribute (for example, a `class`-kind sub-attribute referencing another class) attaches to the nearest containing artefact — the class or global attribute the nested attribute is, at any depth, ultimately declared within — exactly as an ordinary top-level attribute's dependencies do. Nesting is structurally transparent for dependency-graph purposes: it introduces no new edge type or node type (§14.2).
 
@@ -1271,6 +1302,8 @@ An OOML artefact (class or global attribute) is **valid** if and only if all app
 | T08 | The `keyType` on an attribute of kind `map` MUST be a primitive type name from §7. |
 | T09 | An attribute of kind `nested` MUST NOT have `type`, `valueKind`, `valueType`, `keyKind`, or `keyType`. |
 | T10 | An attribute of kind `nested` MUST have a non-empty `attributes` property, validated per the same rules as a class's `attributes` property (§9.1, §8.2). This applies equally to a global attribute of kind `nested` (§7.2). |
+| T11 | When `valueKind` is `nested`, `valueType` MUST be a non-empty map of sub-attribute identifier to sub-attribute definition, validated per the same rules as an `attributes` property (§9.1, §8.2), rather than a string. |
+| T12 | `keyKind` MUST NOT be `nested`. |
 
 ### 16.3 Inheritance Rules
 

@@ -411,17 +411,18 @@
 		},
 		"collectionValueKind": {
 			"type": "string",
-			"description": "Kind of collection values.",
+			"description": "Kind of collection values. May be 'nested' for an inline sub-attribute shape.",
 			"enum": [
 				"primitive",
 				"object",
 				"class",
 				"enum",
-				"attribute"
+				"attribute",
+				"nested"
 			]
 		},
 		"collectionValueType": {
-			"description": "Type of collection values: primitive name, class FQN range, global attribute FQN range, or 'self'.",
+			"description": "Shape of collection values: primitive name, class FQN range, global attribute FQN range, 'self', or (when valueKind is 'nested') an inline non-empty sub-attribute map.",
 			"oneOf": [
 				{
 					"$ref": "#/$defs/primitiveTypeName"
@@ -431,6 +432,10 @@
 				},
 				{
 					"$ref": "#/$defs/globalAttrFqnRange"
+				},
+				{
+					"$ref": "#/$defs/attributesObject",
+					"minProperties": 1
 				}
 			]
 		},
@@ -535,10 +540,10 @@
 							"const": "map"
 						},
 						"keyKind": {
-							"$ref": "#/$defs/collectionValueKind"
+							"$ref": "#/$defs/collectionKeyKind"
 						},
 						"keyType": {
-							"$ref": "#/$defs/collectionValueType"
+							"$ref": "#/$defs/collectionKeyType"
 						},
 						"valueKind": {
 							"$ref": "#/$defs/collectionValueKind"
@@ -866,6 +871,31 @@
 						"attributes"
 					],
 					"additionalProperties": false
+				}
+			]
+		},
+		"collectionKeyKind": {
+			"type": "string",
+			"description": "Kind of map keys. Excludes 'nested': a map key must have well-defined equality for lookup.",
+			"enum": [
+				"primitive",
+				"object",
+				"class",
+				"enum",
+				"attribute"
+			]
+		},
+		"collectionKeyType": {
+			"description": "Shape of map keys: primitive name, class FQN range, or global attribute FQN range. Never an inline sub-attribute map, since keys cannot be nested.",
+			"oneOf": [
+				{
+					"$ref": "#/$defs/primitiveTypeName"
+				},
+				{
+					"$ref": "#/$defs/classFqnRange"
+				},
+				{
+					"$ref": "#/$defs/globalAttrFqnRange"
 				}
 			]
 		}
