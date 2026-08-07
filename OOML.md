@@ -36,7 +36,7 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 9. [Attributes](#9-attributes)
 10. [Metadata](#10-metadata)
 11. [Inheritance: Superclasses and Subclasses](#11-inheritance-superclasses-and-subclasses)
-12. [Aliases](#12-aliases)
+12. [Renaming and Overriding Inherited Attributes](#12-renaming-and-overriding-inherited-attributes)
 13. [Type Hierarchy: Supertypes and Subtypes](#13-type-hierarchy-supertypes-and-subtypes)
 14. [The Dependency Graph](#14-the-dependency-graph)
 15. [Serialisation Format](#15-serialisation-format)
@@ -126,7 +126,8 @@ The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "S
 | **`enum` attribute** | An attribute whose value is a reference to a class that is a subtype of the named root class, excluding the named root class itself |
 | **Collection** | An ordered or unordered group of values sharing a declared element type: `list`, `set`, or `map` |
 | **Static attribute** | An attribute whose value belongs to the class rather than to instances; subclasses may redeclare it unless `final` is also set |
-| **Alias** | A locally-scoped accessor name declared by a class, mapping a short name to the FQN of an inherited or imported attribute |
+| **Rename** | Replacing an inherited attribute's exposed name via `use.as` (§12.3); the old name is no longer reachable from this class or its subclasses |
+| **Override** | Adjusting a limited, override-eligible set of properties on an inherited attribute via `use.override` (§12.4), without changing its identity |
 | **MRO** | Method Resolution Order; the deterministic linearisation of a class's ancestor list used to compute its full attribute set |
 | **FQN** | Fully Qualified Name; the globally unique identity of a class or global attribute (see §4) |
 | **`self`** | A reserved type reference used during authoring to refer to the declaring class itself; expanded to the class's FQN range before distribution |
@@ -223,8 +224,7 @@ When committed as `com.example.hr/Employee@1.3.0`, the above expands to:
 - A global attribute name MUST be unique within a namespace.
 - Because class names are PascalCase and global attribute names are camelCase (see §4.5), a class and a global attribute can never share an identical name within the same namespace — the two uniqueness constraints above never need to be checked against each other.
 - Inline attribute identifiers MUST be unique within the class that declares them.
-- Inline attribute identifiers MUST NOT collide with any alias declared by the same class (rule A03).
-- The full accessible name surface of a class — its own attribute identifiers, its inherited attribute identifiers (by their canonical local names where unambiguous), and its aliases — MUST be collision-free after alias resolution (rule A04).
+- The full accessible name surface of a class — its own attribute identifiers and its inherited attribute identifiers (by their canonical local names where unambiguous, or as adjusted by `use`, §12) — MUST be collision-free (rule U03).
 
 ### 4.5 Name Conventions
 
@@ -234,7 +234,6 @@ When committed as `com.example.hr/Employee@1.3.0`, the above expands to:
 | Class name | PascalCase | `[A-Z][A-Za-z0-9]*` |
 | Global attribute name | camelCase | `[a-z][a-zA-Z0-9]*` |
 | Attribute identifier | camelCase | `[a-z][a-zA-Z0-9]*` |
-| Alias name | camelCase | `[a-z][a-zA-Z0-9]*` |
 
 ---
 
@@ -280,8 +279,11 @@ The following changes are breaking and MUST increment the MAJOR version:
 - Changing an `object` or `class` attribute's `type` to an incompatible class (one that is not a subtype of the original)
 - Removing a class from the `extends` array
 - Changing the `value` of a `static: true, final: true` attribute
-- Removing an alias
-- Changing an alias to point at a different FQN
+- Renaming an inherited attribute via `use.as` (§12.3), or changing an existing `use.as` value to a different name
+- Removing a `use` entry that previously renamed or overrode an inherited attribute
+- Narrowing an inherited attribute's mechanically-verified or `pattern` property via `use.override` (§12.4)
+- Changing the `value` of an inherited `static`, non-`final` attribute via `use.override.value`
+- Adjusting an override-eligible property on an imported global attribute (§9.9), except `name` and `description`
 - Adding `local: true` to a previously non-local attribute
 - Adding `final: true` to a previously non-final attribute (locks it for the hierarchy)
 - Removing a `required: true` metadata slot declaration from the hierarchy
@@ -303,10 +305,9 @@ The following changes require a MINOR increment:
 *Class changes:*
 - Adding a new optional attribute
 - Adding a new class to the `extends` array
-- Adding a new alias
 - Widening an attribute's `type` (e.g. `int32` → `int64`)
 - Changing a required attribute to optional
-
+- Adding a `deprecated` message to an inherited attribute via `use.override.deprecated`, or to an imported global attribute's own `deprecated` override (§9.9), where none existed before
 - Changing a `class` attribute's `type` to a subtype of the original
 - Adding a new metadata entry
 - Adding a new metadata slot declaration (`required: true`, `value: null`)
@@ -320,7 +321,7 @@ The following changes require a MINOR increment:
 
 ### 5.6 Trivial Changes (TRIVIAL)
 
-- Editing any `description` property
+- Editing any `name` or `description` property
 - Editing `examples`
 - Editing `authors`, `license`, the `deprecated` message string
 - Adding, editing, or removing `tags`
@@ -490,7 +491,7 @@ A class is a JSON object published as a standalone artefact:
 | `abstract` | boolean | OPTIONAL | `false` | If `true`, cannot be instantiated directly. |
 | `final` | boolean | OPTIONAL | `false` | If `true`, cannot be extended by any subclass. |
 | `deprecated` | string | OPTIONAL | — | If present, this class is deprecated; the value is the deprecation message. MUST be a non-empty string. Omit when not deprecated. |
-| `aliases` | object | OPTIONAL | `{}` | Map of alias name to attribute FQN range (see §12). |
+| `use` | object | OPTIONAL | `{}` | Map of attribute identifier or FQN range to a renaming and/or override adjustment (see §12). |
 | `metadata` | object | OPTIONAL | `{}` | Map of metadata schema FQN range to metadata entry (see §10). |
 | `attributes` | object | OPTIONAL | `{}` | Map of attribute identifier to attribute (see §9). Omit when empty. |
 
@@ -538,10 +539,10 @@ Every attribute, regardless of `kind`, shares the following properties:
 | `description` | string | RECOMMENDED | — | Human-readable purpose of this attribute. |
 | `required` | boolean | OPTIONAL | `false` | Whether instances of this class MUST carry a value for this attribute. Applies only to non-static attributes (see rule S11). |
 | `nullable` | boolean | OPTIONAL | `false` | Whether the instance-level value MAY be JSON `null` when present. Applies only to non-static attributes (see rule S12). |
-| `static` | boolean | OPTIONAL | `false` | If `true`, the value belongs to the class, not to instances. Instances cannot set or override it. The `value` property MAY be provided; if absent the value is `undefined`. Subclasses may redeclare the attribute with a different value unless `final: true` is also set. MUST NOT be combined with `required: true` (rule S11) or `nullable: true` (rule S12). |
+| `static` | boolean | OPTIONAL | `false` | If `true`, the value belongs to the class, not to instances. Instances cannot set or override it. The `value` property MAY be provided; if absent the value is `undefined`. A subclass MAY change an inherited `static` attribute's value via `use.override.value` (§12.4), unless `final: true` is also set. MUST NOT be combined with `required: true` (rule S11) or `nullable: true` (rule S12). |
 | `value` | any | OPTIONAL | — | The class-level value for a `static` attribute. MUST be consistent with `type`. When absent on a `static` attribute, the value is `undefined`. MUST NOT appear on non-static attributes. |
 | `local` | boolean | OPTIONAL | `false` | If `true`, this attribute is scoped to the declaring class and is not inherited by subclasses. Remains fully visible and accessible to consumers of the declaring class. |
-| `final` | boolean | OPTIONAL | `false` | If `true`, subclasses cannot shadow, alias, or further constrain this attribute. Combined with `static: true`, locks the class-level value for the entire hierarchy. |
+| `final` | boolean | OPTIONAL | `false` | If `true`, subclasses cannot shadow or further constrain this attribute. Combined with `static: true`, locks the class-level value for the entire hierarchy (`use.override.value` does not apply). Renaming via `use.as` (§12.3) is still permitted, since it does not change the attribute's structural contract. |
 | `deprecated` | string | OPTIONAL | — | If present, this attribute is deprecated; the value is the deprecation message. MUST be a non-empty string. Omit when not deprecated. |
 
 **`static` examples:**
@@ -791,7 +792,22 @@ An attribute that references a standalone global attribute (see §9). The attrib
 |----------|----------|-------------|
 | `type` | REQUIRED | FQN range of the global attribute. |
 
-All common properties (`name`, `required`, `nullable`, `static`, `local`, `final`, `deprecated`) apply to attributes of kind `attribute`. The structural properties of the value (`kind`, `type`, and type-specific constraints) are inherited from the referenced global attribute and MUST NOT be redeclared on the attribute. The `description` on the attribute is the context-specific description within this class; the global attribute's own `description` is the canonical domain description.
+All common properties (`name`, `required`, `nullable`, `static`, `local`, `final`, `deprecated`) apply to attributes of kind `attribute`. `kind` and `type` are always inherited from the referenced global attribute and MUST NOT be redeclared. `required`, `nullable`, `static`, `local`, and `final` are properties of the importing slot itself — a global attribute never declares these (§7.2) — so there is no inherited value to override; the importing class simply sets them as it would on any other attribute.
+
+The global attribute's own type-specific constraint properties (e.g. `minLength`, `maxLength`, `pattern`, `precision`, `scale`) and `deprecated` MAY be adjusted directly as siblings, following exactly the override-eligibility and narrowing rules of §12.4 — no wrapper is needed here, since the importing attribute's own JSON object is already the place a class states its own properties for this attribute:
+
+```json
+"zipCode": {
+	"kind": "attribute",
+	"type": "org.ooml.address/postalNumber@1.0.2",
+	"name": "ZIP Code",
+	"required": true,
+	"pattern": "^\\d{5}(-\\d{4})?$",
+	"description": "A US ZIP code, formatted for the checkout form."
+}
+```
+
+Here `postalNumber`'s own `pattern` and `description` are narrowed and clarified respectively for this specific use, without altering the global attribute's own published definition. As with `use.override` (§12.4), every such adjustment except `name` and `description` is a MAJOR (breaking) change (§5.4), and `deprecated` MAY only be added, never changed or removed, if the global attribute does not already carry one.
 
 ### 9.10 Kind: `nested`
 
@@ -826,7 +842,7 @@ An ad hoc, locally-scoped data structure with no independent identity, described
 
 A sub-attribute MAY itself be of kind `nested`, allowing arbitrarily deep nesting. Each level's `attributes` map follows exactly the same rules as any other attribute map, including its own attribute identifiers, common properties, and kind-specific properties. A global attribute MAY also be of kind `nested` (§7.2), providing a way to publish a reusable, independently-versioned nested shape rather than declaring the same structure inline in every class that needs it.
 
-A `nested` attribute MUST NOT have `type`, `valueKind`, `valueType`, `keyKind`, or `keyType`. `extends`, `aliases`, and `metadata` are not valid within a nested attribute's structure — a nested attribute is not a class, and does not carry class-level concepts such as inheritance or an independent metadata surface.
+A `nested` attribute MUST NOT have `type`, `valueKind`, `valueType`, `keyKind`, or `keyType`. `extends`, `use`, and `metadata` are not valid within a nested attribute's structure — a nested attribute is not a class, and does not carry class-level concepts such as inheritance or an independent metadata surface.
 
 A `list`, `set`, or `map` MAY hold nested values via `valueKind: "nested"`, in which case the collection attribute's `valueType` — not `attributes` — carries the sub-attribute map, since it is each collection element that has the nested shape, not the collection attribute itself (§9.6). A map's *keys* MUST NOT be nested (§9.8).
 
@@ -955,7 +971,7 @@ The `local` and `final` modifiers apply to attributes with the same semantics as
 
 **`local: true` on an attribute** means the attribute is declared on this class and is fully accessible to consumers of this class, but subclasses do not inherit it. It does not appear in a subclass's MRO-resolved attribute set. A subclass may declare its own attribute with the same name without it being considered a redeclaration conflict.
 
-**`final: true` on an attribute** means no subclass may shadow, alias, or further constrain the attribute. Attempting to declare an attribute with the same canonical local name in a subclass is a validation error (rule I06). Attempting to alias a `final` attribute to a different name in a subclass is permitted — aliasing is a navigation convenience, not a structural modification.
+**`final: true` on an attribute** means no subclass may shadow or further constrain the attribute. Attempting to declare an attribute with the same canonical local name in a subclass is a validation error (rule I06). Renaming a `final` attribute via `use.as` (§12.3) in a subclass is permitted — renaming does not touch the attribute's `kind`, `type`, or constraints, so it is not the kind of structural modification `final` guards against.
 
 Interaction rules for attributes:
 
@@ -1004,10 +1020,12 @@ Here `com.example.hr/Person` and `com.example.common/Auditable` are both **super
 
 1. A subclass inherits all attributes from all its superclasses that are not marked `local: true`, and transitively from all ancestors.
 2. Inherited attributes MUST NOT be re-declared in a subclass, unless the inherited attribute is `local: true` in the ancestor (in which case the subclass is free to declare its own attribute with the same name).
-3. A subclass MUST NOT override an inherited attribute's `kind`, `type`, or constraints.
+3. A subclass MUST NOT override an inherited attribute's `kind` or `type`. A limited set of other properties MAY be adjusted via the `use` property (§12), including the `value` of an inherited `static`, non-`final` attribute — this is the only mechanism by which such a value may be changed by a subclass.
 4. A subclass MUST NOT shadow or re-declare an attribute inherited from any ancestor that is marked `final: true` (rule I06).
 5. Inherited attributes from different ancestors whose **global attribute FQNs differ** are always distinct, regardless of whether their local attribute identifiers happen to match. There is no conflict between them at the type level.
 6. Inherited attributes from different ancestors that share the **same global attribute FQN** are the same attribute and appear once in the resolved attribute set. This is the only true diamond case and requires no resolution rule beyond deduplication.
+7. Where two or more ancestors have independently applied a `use.override` to the same underlying attribute (rule 6), the narrowest value for each mechanically-verified property (§12.4) applies automatically in the inheriting class, with no action required from it.
+8. Where two or more ancestors have applied conflicting `pattern` overrides to the same underlying attribute, the inheriting class MUST explicitly resolve the conflict with its own `use.override.pattern` entry (§12.5, rule U06).
 
 ### 11.3 Attribute Resolution Order (MRO)
 
@@ -1019,13 +1037,13 @@ For a class `C` with `"extends": [A, B]`:
 3. Prepend the linearisation of `B` (recursively), deduplicating any ancestors already included from step 2.
 4. The resulting ordered list is the MRO of `C`.
 
-The MRO determines the order in which attributes appear in tooling output (e.g. schema documentation, code generation). Attributes earlier in the MRO take precedence for local-name access where no alias has been declared and no collision exists.
+The MRO determines the order in which attributes appear in tooling output (e.g. schema documentation, code generation). Attributes earlier in the MRO take precedence for local-name access where no `use.as` rename has been applied and no collision exists.
 
 ### 11.4 Local Name Access and Collisions
 
 An inherited attribute is accessible by its **canonical local name** (the attribute identifier as declared in the ancestor class) if and only if that name is unambiguous — i.e. no other inherited attribute in the same class shares the same local name (regardless of FQN).
 
-If two inherited attributes share a local name, neither is accessible by that name without an explicit alias (see §13). Tooling SHOULD warn when a local name collision is left unaliased.
+If two inherited attributes share a local name, neither is accessible by that name unless one is given a new name via `use` (see §12). Tooling SHOULD warn when a local name collision is left unresolved.
 
 ### 11.5 Abstract Classes
 
@@ -1052,23 +1070,28 @@ This is the principal mechanism by which OOML propagates inheritance changes wit
 ---
 
 
-## 12. Aliases
+## 12. Renaming and Overriding Inherited Attributes
 
 ### 12.1 Purpose
 
-An alias is a locally-scoped accessor name that a class declares for an attribute reachable on its instances — whether that attribute was inherited from a superclass or imported via an attribute of `"kind": "attribute"`. Aliases exist to:
+A subclass may need to adjust an attribute it inherits — without redeclaring the attribute itself, which is not possible (§11.2 rule 3). The `use` property exists for exactly this, and covers two distinct needs:
 
-1. **Disambiguate local name collisions.** When two inherited attributes share a local attribute identifier (but have different FQNs), neither is accessible by that name without an alias.
-2. **Provide ergonomic names.** When a canonical attribute name is verbose or contextually awkward, an alias gives the class author control over the local interface.
-3. **Expose imported global attributes under class-appropriate names.** A standalone global attribute often carries a generic, domain-wide name (e.g. `temperature`); an alias gives it a more specific, context-appropriate name (e.g. `surfaceTemperature`) without altering the underlying attribute's identity or contract.
+1. **Disambiguating a name collision.** When two ancestors each contribute an attribute under the same local attribute identifier but with different underlying FQNs, neither is reachable by that shared name (§11.4). `use` resolves this by giving one specific attribute — identified by its FQN range, since the name alone cannot distinguish it — a new, unambiguous name.
+2. **Renaming or narrowing an already-unambiguous inherited attribute.** When an attribute is already reachable under one clear name, `use` can rename it for local clarity, adjust a small set of override-eligible properties, or both.
 
-### 12.2 Alias Declaration
+There is no separate aliasing mechanism. Renaming an inherited attribute via `use` fully replaces its exposed name — the old name is no longer reachable from this class or any of its subclasses (§12.3). This is a deliberate, precedented design choice (Eiffel's `rename` clause resolves multiple-inheritance name clashes and provides contextual renaming the same way, with the same non-additive semantics), and it keeps OOML's naming model simple: at any point in the hierarchy, an attribute has exactly one current name, never several.
 
-Aliases are declared in the `aliases` property of a class definition, as a JSON object whose keys are alias names and whose values are attribute FQN ranges:
+### 12.2 The `use` Property
+
+`use` is declared on a class, as a JSON object whose keys identify an inherited attribute and whose values describe the adjustment to apply. A key is either:
+
+- **A bare attribute identifier** (e.g. `gravity`) — valid only when that name is currently unambiguous on this class, per the normal local-name-access rules (§11.4).
+- **An FQN range** (e.g. `com.example.physics/temperature@^1.0.0`) — used specifically to pick one attribute out from under a name collision, since the collision itself makes the bare name unusable. Distinguished from a bare identifier purely by shape: an FQN range always contains both `/` and `@`; a bare attribute identifier never does.
+
+Each entry MAY contain `as` (a new local name), `override` (adjustments to a limited set of properties, §12.4), or both. An entry with neither is meaningless and MUST NOT be used (rule U02).
 
 ```json
 {
-	"ooml": "0.1.0",
 	"fqn": "com.example.planets/CelestialBody@1.0.0",
 	"name": "Celestial Body",
 	"description": "A body in a planetary system.",
@@ -1076,40 +1099,78 @@ Aliases are declared in the `aliases` property of a class definition, as a JSON 
 		"com.example.planets/Surface@^1.0.0",
 		"com.example.planets/Core@^1.0.0"
 	],
-	"aliases": {
-		"surfaceTemperature": "com.example.physics/temperature@^1.0.0",
-		"coreTemperature":    "com.example.geology/coreTemperature@^1.0.0"
-	}
+	"use": {
+		"com.example.physics/temperature@^1.0.0": {
+			"as": "surfaceTemperature"
+		},
+		"com.example.geology/coreTemperature@^1.0.0": {
+			"as": "coreTemperature"
+		},
+		"gravity": {
+			"as": "surfaceGravity",
+			"override": {
+				"description": "Surface gravity of this celestial body, relative to Earth's (1.0 = Earth gravity)."
+			}
+		}
+	},
+	"attributes": {}
 }
 ```
 
-Here `surfaceTemperature` and `coreTemperature` are aliases for two different global attributes that both happen to be locally named `temperature` in their respective superclasses. With these aliases declared, instances of `CelestialBody` expose `surfaceTemperature` and `coreTemperature` as distinct, unambiguous accessors.
+`temperature` is contributed by both `Surface` and `Core`, each backed by a different global attribute — the bare name alone cannot say which is meant, so each is picked out by its FQN range. `gravity` is contributed only by `Surface`; there is nothing else it could mean, so it is already reachable by that one bare name, and `use` refers to it that way while renaming it and adjusting its description.
 
-### 12.3 Alias Resolution
+### 12.3 Renaming (`as`)
 
-An alias name resolves to the attribute whose FQN matches the declared FQN range, within the class's full resolved attribute set (own attributes + all inherited attributes). If the FQN range does not match any attribute in the resolved set, it is a validation error (rule A01).
+`as` replaces the attribute's exposed name with a new one, for this class and every subclass beneath it. The previous name — whether it was the attribute's original local identifier or a name established by an ancestor's own `use.as` — is no longer reachable from this point in the hierarchy onward. Renaming is not additive: it does not leave the old name usable alongside the new one.
 
-### 12.4 Alias Inheritance
+Because renaming removes a name from where it worked before, it is always a MAJOR (breaking) change (§5.4).
 
-A subclass inherits all aliases declared by its ancestors. The inherited alias names are part of the subclass's accessible interface just as if the subclass had declared them itself.
+A class MAY, after renaming a name away, declare its own unrelated attribute using that now-freed name. Doing so is permitted but SHOULD be approached with caution, since reusing a name an ancestor's data once meant something different under can be confusing to anyone tracing the class hierarchy.
 
-A subclass MAY declare additional aliases for any attribute reachable on it — including attributes already aliased by an ancestor. The ancestor's alias is not removed; both the ancestor alias and the subclass alias are valid accessors for the same attribute.
+### 12.4 Overriding (`override`)
 
-A subclass MUST NOT declare an alias name that is already used by any ancestor for a **different** FQN. This would create an ambiguous accessor name. It is a validation error (rule A05).
+`override` adjusts a limited set of properties on an inherited attribute, without changing its identity (`kind`, `type`) or its structural role. Only the following properties are override-eligible:
 
-### 12.5 Alias Uniqueness Rules
+| Property | Rule |
+|----------|------|
+| `name`, `description` | Freely overridable. No directional constraint. |
+| `minLength`, `minimum`, `minItems`, `exclusiveMinimum` | Overridable only by increasing the value (narrowing). |
+| `maxLength`, `maximum`, `maxItems`, `exclusiveMaximum`, `precision`, `scale` | Overridable only by decreasing the value (narrowing). |
+| `required` | Overridable only `false → true` (narrowing). |
+| `nullable` | Overridable only `true → false` (narrowing). |
+| `pattern` | Overridable; the override is asserted to be narrower than the inherited pattern, but — unlike the properties above — this is not mechanically verified (§21, pattern containment is undecidable in general for the full ECMA 262 dialect OOML's `pattern` property uses). |
+| `deprecated` | Addable only. MUST NOT be used where the inherited attribute already carries a `deprecated` message — `override` cannot change or remove an existing deprecation. |
+| `value` | Overridable only when the inherited attribute is `static: true` and NOT `final: true`. Not directionally constrained — a static value has no notion of narrower or wider, only different (§9.1). |
 
-| Rule | Description |
-|------|-------------|
-| A01 | The FQN range in an alias declaration MUST match at least one attribute in the class's resolved attribute set. |
-| A02 | A given attribute FQN MUST NOT be the target of more than one alias within the same class declaration. (Subclasses may introduce additional aliases for the same FQN; the restriction is per-class, not per-hierarchy.) |
-| A03 | An alias name MUST NOT collide with any own attribute identifier declared in the same class. |
-| A04 | An alias name MUST NOT collide with the unambiguous canonical local name of any other attribute in the class's resolved set. |
-| A05 | A subclass MUST NOT declare an alias name already used by any ancestor for a different attribute FQN. |
+No other property is override-eligible. `kind`, `type`, `static`, `final`, `local`, `valueKind`, `keyKind`, `valueType`, and `keyType` MUST NOT appear in `override` under any circumstances — these define the attribute's identity and structural role, not a value restriction on it (rule U04).
 
-### 12.6 Aliases and the `attr-fqn`
+For every mechanically-verified property above, if the inherited attribute never declared that property at all, it is treated as maximally permissive — any value the subclass supplies for it is automatically valid narrowing, with nothing further to check. Each property is verified independently against its own prior value; there is no combined-range logic. An `override` property MUST be applicable to the target attribute's actual `kind` — `pattern` cannot be overridden on something that is not string-typed, `minItems` cannot be overridden on something that is not a collection, and so on (rule U04a).
 
-Aliases are purely a navigation convenience. They do not change an attribute's FQN, appear in the dependency graph, or affect how attributes are stored or referenced outside the class's local interface. An alias is not an identity; it is a lens.
+```json
+{
+	"fqn": "com.example.hr/SeniorEmployee@1.0.0",
+	"extends": ["com.example.hr/Employee@^1.2.0"],
+	"name": "Senior Employee",
+	"use": {
+		"employeeNumber": {
+			"as": "legacyStaffNumber",
+			"override": {
+				"description": "Senior staff reference number, using the legacy 8-digit format.",
+				"maxLength": 8
+			}
+		}
+	},
+	"attributes": {}
+}
+```
+
+Because narrowing may invalidate previously-valid data, and changing a `deprecated`/`value` state is a substantive change to the attribute's contract, every `override` adjustment except `name` and `description` is classified as a MAJOR (breaking) change, following the same logic already applied to narrowing a global attribute's own declared constraints (§5.4). `name` and `description` overrides fall under the general TRIVIAL rule for editing descriptive text (§5.6).
+
+### 12.5 Multiple Inheritance and Conflicting Overrides
+
+Where a class inherits the same underlying attribute through two or more ancestors (§11.2 rule 6 — the diamond case), each ancestor may independently have applied its own `use.override` to that attribute before the class in question ever sees it. For every mechanically-verified property, the narrowest value among all contributing ancestors applies automatically — no action is required from the inheriting class, since taking the narrowest is always safe (anything satisfying the tightest bound necessarily satisfies every looser one it was narrowed from).
+
+`pattern` has no such automatic resolution, since pattern narrowing cannot be mechanically compared. If two ancestors supply conflicting `pattern` overrides for the same underlying attribute, the inheriting class MUST explicitly resolve the conflict with its own `use.override.pattern` entry; leaving it unresolved is a validation error (rule U06). Authoring tooling SHOULD detect and surface this situation to the class author rather than leaving it to be discovered at validation time.
 
 ---
 
@@ -1159,7 +1220,7 @@ The OOML dependency graph is a directed acyclic graph (DAG) where:
 - **Nodes** are class and global attribute versions, identified by their exact FQN (including version).
 - **Edges** are directed from a dependent to its dependency, labelled with the version range found at the point of reference.
 
-There is no separate `dependencies` property. The dependency graph is **derived**, not declared: every edge is read directly from the referencing properties already present in a class definition — `extends`, attribute `type` properties, collection `valueType`/`keyType` properties, `aliases` values, and `metadata` keys. A class definition is fully self-describing; nothing beyond its own body is needed to compute its dependency edges.
+There is no separate `dependencies` property. The dependency graph is **derived**, not declared: every edge is read directly from the referencing properties already present in a class definition — `extends`, attribute `type` properties, collection `valueType`/`keyType` properties, and `metadata` keys. A class definition is fully self-describing; nothing beyond its own body is needed to compute its dependency edges.
 
 There are no package nodes. Every node is an individual versioned class or global attribute. The dependency graph is a logical structure implied by the language; how it is computed, cached, or traversed by any particular tool is outside the scope of this specification.
 
@@ -1175,18 +1236,19 @@ Edges arise from the following sources:
 | `enum` attribute `type` property | Enum root dependency: the class references a class as an enum root |
 | `attribute`-kind attribute `type` property | Attribute import dependency: the class uses a standalone global attribute |
 | `list`, `set`, or `map` `valueType`/`keyType` property | Collection element dependency |
-| `aliases` value (each entry) | Alias dependency: the class declares a local name for an inherited or imported attribute |
 | `metadata` object key (each entry) | Metadata schema dependency: the class carries metadata conforming to a metadata schema class |
 
 A self-referential `"self"` token (§4.3) resolves to the declaring class's own FQN once expanded, and is treated identically to an explicit self-referential FQN for edge purposes.
 
 A `nested`-kind attribute introduces no edge of its own: it has no `type` and no FQN. Edges arising from its sub-attributes (at any depth) are attributed to the nearest containing artefact — the class or global attribute the nested structure is ultimately declared within — exactly as if those sub-attributes were declared directly on that artefact. Nesting is structurally transparent to the dependency graph (§9.10).
 
+The `use` property (§12) introduces no edge of its own either. An FQN range used as a `use` key identifies an attribute that is, by construction, already reachable via an existing `extends` or `attribute-import` edge — `use` only ever adjusts something already structurally present, never references anything new.
+
 Tools MAY distinguish edge types in visualisations and impact analysis.
 
 ### 14.3 Version Range Syntax
 
-OOML adopts the npm-compatible semver version range syntax for expressing version constraints wherever an FQN range appears (`extends`, attribute `type`/`valueType`/`keyType`, `aliases` values, `metadata` keys):
+OOML adopts the npm-compatible semver version range syntax for expressing version constraints wherever an FQN range appears (`extends`, attribute `type`/`valueType`/`keyType`, `use` FQN-range keys, `metadata` keys):
 
 | Specifier | Meaning |
 |-----------|---------|
@@ -1240,7 +1302,7 @@ Optional properties whose value equals their declared default SHOULD be omitted 
 | `required` | `false` | `false` |
 | `nullable` | `false` | `false` |
 | `extends` | `null` | `null` or `[]` |
-| `aliases` | `{}` | `{}` |
+| `use` | `{}` | `{}` |
 | `metadata` | `{}` | `{}` |
 | `attributes` | `{}` | `{}` |
 | `cascade` (metadata) | `false` | `false` |
@@ -1279,7 +1341,6 @@ An OOML artefact (class or global attribute) is **valid** if and only if all app
 | S03a | The `name` property MUST be present and non-empty on all artefacts (classes and global attributes). |
 | S04 | The version portion of `fqn` MUST be a valid, exact (non-range) semver string. |
 | S05 | Attribute identifiers MUST match `[a-z][a-zA-Z0-9]*` (camelCase). |
-| S06 | Alias names MUST match `[a-z][a-zA-Z0-9]*` (camelCase). |
 
 | S08 | A class MUST NOT be both `abstract: true` and `final: true`. |
 | S09 | The `value` property MUST NOT appear on non-`static` attributes. |
@@ -1316,15 +1377,19 @@ An OOML artefact (class or global attribute) is **valid** if and only if all app
 | I05 | A class marked `abstract: false` MUST provide (via its own or inherited attributes) all required non-`local` attributes needed for instantiation. |
 | I06 | A class MUST NOT declare an attribute that shadows a `final: true` attribute in any ancestor. |
 
-### 16.4 Alias Rules
+### 16.4 Use Rules
 
 | Rule ID | Description |
 |---------|-------------|
-| A01 | The FQN range in an alias declaration MUST match at least one attribute in the class's resolved attribute set. |
-| A02 | A given attribute FQN MUST NOT be the target of more than one alias within the same class declaration. |
-| A03 | An alias name MUST NOT collide with any own attribute identifier in the same class. |
-| A04 | An alias name MUST NOT collide with the unambiguous canonical local name of any attribute in the class's resolved set. |
-| A05 | A subclass MUST NOT declare an alias name already used by any ancestor for a different attribute FQN. |
+| U01 | Each key in `use` MUST be either a bare attribute identifier that is currently unambiguous on the class (§11.4), or an FQN range that resolves to an attribute in the class's resolved attribute set. |
+| U02 | A `use` entry MUST specify at least one of `as` or `override`. An entry with neither is a validation error. |
+| U03 | An `as` value MUST NOT collide with any own attribute identifier declared by the same class, nor with the unambiguous canonical local name or any other `as` target already established (by this class or an ancestor) elsewhere in the resolved attribute set. |
+| U04 | `override` MUST NOT contain `kind`, `type`, `static`, `final`, `local`, `valueKind`, `keyKind`, `valueType`, or `keyType`. Only the properties listed in §12.4 are override-eligible. |
+| U04a | Each property present in `override` MUST be applicable to the target attribute's actual `kind` (e.g. `pattern` only applies to string-typed `primitive` attributes; `minItems`/`maxItems` only apply to `list`, `set`, or `map`). |
+| U05 | For every mechanically-verified override-eligible property (§12.4) except `pattern`, the overriding value MUST be narrower than or equal to the inherited value, where "narrower" follows the direction given in §12.4's table. An ancestor property that was never set is treated as maximally permissive for this check. |
+| U06 | Where two or more ancestors contribute conflicting `pattern` overrides for the same underlying attribute (§12.5), the inheriting class MUST supply its own `use.override.pattern` entry resolving the conflict. Leaving it unresolved is a validation error. |
+| U07 | `override.value` MUST NOT appear unless the target attribute is `static: true` and NOT `final: true`. |
+| U08 | `override.deprecated` MUST NOT appear if the target attribute already carries a `deprecated` message — `override` may only add a deprecation, never change or remove one. |
 
 ### 16.5 Metadata Rules
 
@@ -1341,7 +1406,7 @@ An OOML artefact (class or global attribute) is **valid** if and only if all app
 
 | Rule ID | Description |
 |---------|-------------|
-| D01 | All version ranges appearing in `extends`, attribute `type`/`valueType`/`keyType` properties, `aliases` values, and `metadata` object keys MUST be syntactically valid per §14.3. |
+| D01 | All version ranges appearing in `extends`, attribute `type`/`valueType`/`keyType` properties, `use` FQN-range keys, and `metadata` object keys MUST be syntactically valid per §14.3. |
 | D02 | The dependency graph, derived from `extends`, `attribute-import`, and `metadata` edges, MUST be acyclic. Self-referential `object`, `class`, and `enum` attribute edges are exempt (they are references by identity to a class or an instance, not structural embedding). |
 | D03 | All referenced version ranges SHOULD be satisfiable by at least one known artefact version within the resolution context at the time of validation. |
 
@@ -1358,7 +1423,7 @@ An OOML artefact (class or global attribute) is **valid** if and only if all app
 
 ## 17. Complete Example
 
-The following example demonstrates multi-inheritance, standalone global attributes, aliases, and metadata. All artefacts are shown in their distributed form with full FQNs.
+The following example demonstrates multi-inheritance, standalone global attributes, renaming and overriding inherited attributes, and metadata. All artefacts are shown in their distributed form with full FQNs.
 
 ### 17.1 Standalone Global Attribute and Enum Root
 
@@ -1449,9 +1514,6 @@ A metadata schema class `HrSchemaInfo` is published as an ordinary class:
 	"authors": ["Jane Smith <jane@example.com>"],
 	"license": "Apache-2.0",
 	"extends": ["com.example.hr/Person@^1.0.0"],
-	"aliases": {
-		"salary": "com.example.finance/salary@^1.0.0"
-	},
 	"attributes": {
 		"employeeNumber": {
 			"kind": "primitive", "type": "string",
@@ -1497,7 +1559,7 @@ A metadata schema class `HrSchemaInfo` is published as an ordinary class:
 			"kind": "attribute",
 			"type": "com.example.finance/salary@^1.0.0",
 			"name": "Annual Salary",
-			"description": "Annual gross salary. Aliased as 'salary' for ergonomic access.",
+			"description": "Annual gross salary in the organisation's base currency.",
 			"nullable": true
 		},
 		"schemaVersion": {
@@ -1552,7 +1614,7 @@ Full resolved attribute surface of an `Employee` instance (in MRO order):
 | `endDate` | `Employee` | `com.example.hr/Employee@1.2.0#endDate` |
 | `department` | `Employee` | `com.example.hr/Employee@1.2.0#department` |
 | `manager` | `Employee` | `com.example.hr/Employee@1.2.0#manager` |
-| `annualSalary` / `salary` *(alias)* | `Employee` | `com.example.finance/salary@1.0.0` |
+| `annualSalary` | `Employee` | `com.example.finance/salary@1.0.0` |
 | `schemaVersion` | `Employee` | `com.example.hr/Employee@1.2.0#schemaVersion` |
 
 ### 17.4 Dependency Graph
@@ -1564,7 +1626,6 @@ com.example.hr/Employee@1.2.0
   --[object]-->           com.example.hr/Employee@^1.2.0   (self-reference; exempt)
   --[enum]-->             com.example.hr/EmploymentType@^1.0.0
   --[attribute-import]--> com.example.finance/salary@^1.0.0
-  --[alias]-->            com.example.finance/salary@^1.0.0
 
 com.example.hr/Person@1.0.0
   --[extends]-->   com.example.hr/Party@^1.1.0
@@ -1591,7 +1652,7 @@ Result (from any tooling that indexes the dependency graph):
 **Example dependency insight query:** "What directly depends on `com.example.finance/salary@1.0.0`?"
 
 Result:
-- `com.example.hr/Employee@1.2.0` (attribute-import edge and alias edge)
+- `com.example.hr/Employee@1.2.0` (attribute-import edge)
 
 ---
 
@@ -1608,7 +1669,6 @@ lc-segment        = LOWER *( LOWER / DIGIT )
 class-name        = UPPER *( ALPHA / DIGIT )        ; PascalCase (classes and enum roots)
 global-attr-name  = LOWER *( ALPHA / DIGIT )        ; camelCase
 attr-name         = LOWER *( ALPHA / DIGIT )        ; camelCase
-alias-name        = LOWER *( ALPHA / DIGIT )        ; camelCase
 group-name        = LOWER *( LOWER / DIGIT / "-" )
 
 ; Version (exact)
@@ -1627,9 +1687,15 @@ global-attr-fqn   = namespace "/" global-attr-name  "@" version
 owned-attr-fqn    = class-fqn "#" attr-path  ; inline-owned attributes and sub-attributes
 attr-path         = attr-name *( "." attr-name )
 
-; FQN range (used in extends, type properties, aliases, metadata keys)
+; FQN range (used in extends, type properties, use keys, metadata keys)
 class-fqn-range        = namespace "/" class-name       "@" version-range
 global-attr-fqn-range  = namespace "/" global-attr-name "@" version-range
+
+; use key: a bare attribute identifier (valid only when currently unambiguous
+; on the class) or an FQN range (used to pick one attribute out from under a
+; name collision). Distinguished purely by shape: a bare attr-name never
+; contains "/" or "@"; an FQN range always contains both.
+use-key = attr-name / class-fqn-range / global-attr-fqn-range
 
 ; Note: enum roots are ordinary classes; no separate enum-fqn form exists
 
@@ -1665,7 +1731,7 @@ JSON is universally supported, human-editable, and requires no specialist toolin
 
 OOML adopts multi-inheritance because real-world modelling requires orthogonal concerns to be composable independently of the primary taxonomic hierarchy. The `Commentable`, `Auditable`, `Taggable` pattern is ubiquitous in practice, and single inheritance forces either combinatorial class explosion or pollution of base classes with concerns that only some subtypes need.
 
-The classical diamond problem — where two ancestors provide different definitions of the same attribute, creating an ambiguous resolution — does not arise in OOML because attributes are identified by FQN, not by local name. Two ancestors can both declare an attribute named `temperature` without conflict: if they reference different global attributes, they are simply different attributes that happen to share a local name. The collision is a presentation inconvenience, handled by aliasing (§13), not an identity or semantic conflict requiring a resolution rule.
+The classical diamond problem — where two ancestors provide different definitions of the same attribute, creating an ambiguous resolution — does not arise in OOML because attributes are identified by FQN, not by local name. Two ancestors can both declare an attribute named `temperature` without conflict: if they reference different global attributes, they are simply different attributes that happen to share a local name. The collision is a presentation inconvenience, resolved by renaming one or both via `use` (§12), not an identity or semantic conflict requiring a resolution rule.
 
 The only genuine diamond case — where two ancestors both reference the exact same global attribute FQN — is resolved by deduplication: the attribute appears once in the resolved set. No precedence rule is needed.
 

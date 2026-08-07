@@ -44,11 +44,6 @@
 			"description": "camelCase attribute identifier.",
 			"pattern": "^[a-z][a-zA-Z0-9]*$"
 		},
-		"aliasName": {
-			"type": "string",
-			"description": "camelCase alias name.",
-			"pattern": "^[a-z][a-zA-Z0-9]*$"
-		},
 		"primitiveTypeName": {
 			"type": "string",
 			"description": "One of the built-in OOML primitive type names.",
@@ -188,16 +183,6 @@
 			"description": "The metadata property: keys are metadata schema FQN ranges; values are schema attribute maps.",
 			"additionalProperties": {
 				"$ref": "#/$defs/metadataSchemaValue"
-			}
-		},
-		"aliasesObject": {
-			"type": "object",
-			"description": "Aliases: keys are camelCase alias names; values are attribute FQN ranges.",
-			"propertyNames": {
-				"$ref": "#/$defs/aliasName"
-			},
-			"additionalProperties": {
-				"$ref": "#/$defs/classFqnRange"
 			}
 		},
 		"commonAttributeProperties": {
@@ -578,7 +563,7 @@
 			]
 		},
 		"globalAttributeReference": {
-			"description": "An attribute of kind 'attribute': references a standalone global attribute.",
+			"description": "An attribute of kind 'attribute': references a standalone global attribute. Type-specific constraint properties and 'deprecated' MAY be adjusted as direct siblings, following the override-eligibility and narrowing rules of \u00a712.4 (\u00a79.9).",
 			"allOf": [
 				{
 					"$ref": "#/$defs/commonAttributeProperties"
@@ -600,7 +585,38 @@
 						"value": {},
 						"local": {},
 						"final": {},
-						"deprecated": {}
+						"deprecated": {},
+						"minLength": {
+							"type": "integer",
+							"minimum": 0
+						},
+						"maxLength": {
+							"type": "integer",
+							"minimum": 0
+						},
+						"minimum": {
+							"type": "number"
+						},
+						"maximum": {
+							"type": "number"
+						},
+						"exclusiveMinimum": {
+							"type": "number"
+						},
+						"exclusiveMaximum": {
+							"type": "number"
+						},
+						"precision": {
+							"type": "integer",
+							"minimum": 1
+						},
+						"scale": {
+							"type": "integer",
+							"minimum": 0
+						},
+						"pattern": {
+							"type": "string"
+						}
 					},
 					"required": [
 						"kind",
@@ -691,14 +707,14 @@
 				"deprecated": {
 					"$ref": "#/$defs/nonEmptyString"
 				},
-				"aliases": {
-					"$ref": "#/$defs/aliasesObject"
-				},
 				"metadata": {
 					"$ref": "#/$defs/metadataObject"
 				},
 				"attributes": {
 					"$ref": "#/$defs/attributesObject"
+				},
+				"use": {
+					"$ref": "#/$defs/useObject"
 				}
 			},
 			"required": [
@@ -898,6 +914,121 @@
 					"$ref": "#/$defs/globalAttrFqnRange"
 				}
 			]
+		},
+		"useKey": {
+			"type": "string",
+			"description": "Either a bare camelCase attribute identifier (valid only when currently unambiguous on the class) or an FQN range picking one attribute out from under a name collision.",
+			"oneOf": [
+				{
+					"$ref": "#/$defs/attributeIdentifier"
+				},
+				{
+					"$ref": "#/$defs/classFqnRange"
+				},
+				{
+					"$ref": "#/$defs/globalAttrFqnRange"
+				}
+			]
+		},
+		"overrideProperties": {
+			"type": "object",
+			"description": "Properties that MAY be overridden on an inherited attribute (via use.override) or an imported global attribute (as direct siblings, \u00a79.9). Only this closed set is permitted (rule U04); each must also be applicable to the target attribute's actual kind (rule U04a).",
+			"properties": {
+				"name": {
+					"type": "string",
+					"minLength": 1
+				},
+				"description": {
+					"type": "string",
+					"minLength": 1
+				},
+				"minLength": {
+					"type": "integer",
+					"minimum": 0
+				},
+				"maxLength": {
+					"type": "integer",
+					"minimum": 0
+				},
+				"minimum": {
+					"type": "number"
+				},
+				"maximum": {
+					"type": "number"
+				},
+				"exclusiveMinimum": {
+					"type": "number"
+				},
+				"exclusiveMaximum": {
+					"type": "number"
+				},
+				"precision": {
+					"type": "integer",
+					"minimum": 1
+				},
+				"scale": {
+					"type": "integer",
+					"minimum": 0
+				},
+				"minItems": {
+					"type": "integer",
+					"minimum": 0
+				},
+				"maxItems": {
+					"type": "integer",
+					"minimum": 0
+				},
+				"required": {
+					"type": "boolean"
+				},
+				"nullable": {
+					"type": "boolean"
+				},
+				"pattern": {
+					"type": "string"
+				},
+				"deprecated": {
+					"type": "string",
+					"minLength": 1
+				},
+				"value": {}
+			},
+			"additionalProperties": false
+		},
+		"useEntry": {
+			"type": "object",
+			"description": "A single use entry: renames the target attribute (as), adjusts its override-eligible properties (override), or both. At least one MUST be present (rule U02).",
+			"properties": {
+				"as": {
+					"$ref": "#/$defs/attributeIdentifier"
+				},
+				"override": {
+					"$ref": "#/$defs/overrideProperties"
+				}
+			},
+			"anyOf": [
+				{
+					"required": [
+						"as"
+					]
+				},
+				{
+					"required": [
+						"override"
+					]
+				}
+			],
+			"additionalProperties": false
+		},
+		"useObject": {
+			"type": "object",
+			"description": "Use: keys identify an inherited attribute (bare name or FQN range, \u00a712.2); values describe how to rename and/or override it.",
+			"propertyNames": {
+				"$ref": "#/$defs/useKey"
+			},
+			"additionalProperties": {
+				"$ref": "#/$defs/useEntry"
+			}
 		}
 	},
 	"oneOf": [
